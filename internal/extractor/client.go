@@ -75,6 +75,7 @@ func (c *Client) Extract(ctx context.Context, chapterTitle, chapterText string) 
 		System:    systemPrompt,
 		Messages: []apiMessage{
 			{Role: "user", Content: prompt},
+			{Role: "assistant", Content: "{"},
 		},
 	}
 
@@ -120,5 +121,6 @@ func (c *Client) Extract(ctx context.Context, chapterTitle, chapterText string) 
 		return "", apiUsage{}, fmt.Errorf("empty response from API")
 	}
 
-	return apiResp.Content[0].Text, apiResp.Usage, nil
+	// Prepend the "{" from the assistant prefill to reconstruct full JSON
+	return "{" + apiResp.Content[0].Text, apiResp.Usage, nil
 }

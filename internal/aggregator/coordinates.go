@@ -27,62 +27,139 @@ func AssignCoordinates(s *store.Store, data *model.AggregatedData) error {
 		parentOf[normalizeName(c.Child)] = normalizeName(c.Parent)
 	}
 
-	// Seed continents matching positions on the base map image ([-512,512] coordinate space)
-	// Image is 1024x1024 mapped to [-512,512]. Coords are [x_horizontal, y_vertical].
+	// Seed continents with wide separation so landmasses don't overlap.
+	// Coordinate space is [-512,512]. Each continent gets its own well-separated region.
+	// Layout (approximate):
+	//   Terandria (upper-left)     Rhir (upper-right)
+	//        Wistram (center)    Izril (center-right)
+	//   Chandrar (lower-left)      Drath (far right)
+	//        Baleros (bottom)
 	seeds := map[string][2]float64{
-		"izril":             {200, -20},     // large continent center-right
-		"baleros":           {-220, -300},   // lower-left
-		"chandrar":          {-80, -120},    // center-left desert
-		"terandria":         {-250, 250},    // upper-left
-		"rhir":              {350, 300},     // upper-right
-		"drath archipelago": {420, 50},      // far right islands
-		"drath":             {420, 50},
+		"izril":             {250, 0},       // center-right, large continent
+		"chandrar":          {-250, -100},   // lower-left, desert continent
+		"terandria":         {-250, 300},    // upper-left
+		"baleros":           {-150, -400},   // bottom-center
+		"rhir":              {350, 350},     // upper-right
+		"drath archipelago": {480, 0},       // far right islands
+		"drath":             {480, 0},
 	}
 
-	// Seed known regions/nations within Izril (southern Izril where V1 action happens)
+	// Izril locations (center-right region, ~100-350 x, ~-120 to 150 y)
 	izrilSeeds := map[string][2]float64{
-		"liscor":                {190, -40},
-		"the wandering inn":     {191, -38},
-		"the inn":               {191, -38},
-		"inn":                   {191, -38},
-		"celum":                 {150, 40},
-		"esthelm":               {130, 30},
-		"wales":                 {120, 50},
-		"invrisil":              {140, 80},
-		"pallass":               {230, -70},
-		"the blood fields":      {180, -60},
-		"the high passes":       {250, 20},
-		"the floodplains":       {188, -43},
-		"flood plains":          {188, -43},
-		"floodplains of liscor": {188, -43},
-		"first landing":         {110, 110},
-		"the northern plains":   {150, 90},
-		"the human lands":       {140, 70},
-		"the drake lands":       {200, -50},
-		"great plains of izril": {180, -90},
-		"high passes":           {250, 20},
-		"vale forest":           {160, 50},
-		"blood fields":          {180, -60},
-		"bloodfields":           {180, -60},
-		"ruins of liscor":       {192, -41},
-		"ruins of albez":        {160, 10},
-		"krakk forest":          {170, 30},
+		"liscor":                {240, -20},
+		"the wandering inn":     {241, -18},
+		"the inn":               {241, -18},
+		"inn":                   {241, -18},
+		"celum":                 {200, 50},
+		"esthelm":               {180, 40},
+		"wales":                 {170, 60},
+		"invrisil":              {190, 90},
+		"pallass":               {280, -50},
+		"the blood fields":      {230, -40},
+		"the high passes":       {300, 30},
+		"the floodplains":       {238, -23},
+		"flood plains":          {238, -23},
+		"floodplains of liscor": {238, -23},
+		"first landing":         {160, 120},
+		"the northern plains":   {200, 100},
+		"the human lands":       {190, 80},
+		"the drake lands":       {250, -30},
+		"great plains of izril": {230, -70},
+		"high passes":           {300, 30},
+		"vale forest":           {210, 60},
+		"blood fields":          {230, -40},
+		"bloodfields":           {230, -40},
+		"ruins of liscor":       {242, -21},
+		"ruins of albez":        {210, 20},
+		"krakk forest":          {220, 40},
 	}
 
-	// Chandrar nations (center-left, below Terandria)
+	// Chandrar nations (lower-left, ~-350 to -150 x, ~-200 to 0 y)
 	chandrarSeeds := map[string][2]float64{
-		"reim":                 {-50, -100},
-		"hellios":              {-60, -120},
-		"germina":              {-100, -140},
-		"nerrhavia":            {-110, -100},
-		"nerrhavia's fallen":   {-110, -100},
-		"belchan":              {-70, -80},
-		"jecrass":              {-40, -130},
-		"medain":               {-100, -80},
-		"khelt":                {-30, -70},
-		"quarass":              {-80, -130},
+		"reim":                 {-220, -80},
+		"hellios":              {-230, -100},
+		"germina":              {-270, -120},
+		"nerrhavia":            {-280, -80},
+		"nerrhavia's fallen":   {-280, -80},
+		"belchan":              {-240, -60},
+		"jecrass":              {-210, -110},
+		"medain":               {-270, -60},
+		"khelt":                {-200, -50},
+		"quarass":              {-250, -110},
+		"tiqr":                 {-300, -110},
+		"pomle":                {-230, -130},
+		"roshal":               {-310, -90},
+		"savere":               {-260, -140},
+		"a'ctelios salash":     {-290, -70},
+		"zeikhal":              {-240, -90},
 	}
 	for name, pos := range chandrarSeeds {
+		izrilSeeds[name] = pos
+	}
+
+	// Terandria nations (upper-left, ~-350 to -150 x, ~200 to 400 y)
+	terandriaSeeds := map[string][2]float64{
+		"ailendamus":       {-280, 330},
+		"calanfer":         {-230, 310},
+		"pheislant":        {-260, 280},
+		"noelictus":        {-220, 350},
+		"dawn concordat":   {-240, 300},
+		"desonis":          {-270, 310},
+		"kaliv":            {-250, 320},
+		"erribathe":        {-210, 320},
+	}
+	for name, pos := range terandriaSeeds {
+		izrilSeeds[name] = pos
+	}
+
+	// Baleros locations (bottom, ~-250 to -50 x, ~-500 to -300 y)
+	balerosSeeds := map[string][2]float64{
+		"talenqual":        {-120, -380},
+		"elvallian":        {-170, -420},
+		"gaiil-drome":      {-190, -390},
+		"claiven earth":    {-160, -360},
+		"paeth":            {-140, -410},
+	}
+	for name, pos := range balerosSeeds {
+		izrilSeeds[name] = pos
+	}
+
+	// Rhir (upper-right, ~280-420 x, ~280-420 y)
+	rhirSeeds := map[string][2]float64{
+		"blighted kingdom": {360, 340},
+	}
+	for name, pos := range rhirSeeds {
+		izrilSeeds[name] = pos
+	}
+
+	// More Izril cities (within Izril's region)
+	moreIzril := map[string][2]float64{
+		"oteslia":              {270, -60},
+		"zeres":                {290, -40},
+		"manus":                {310, -20},
+		"salazsar":             {280, -30},
+		"fissival":             {300, -50},
+		"reizmelt":             {185, 70},
+		"hectval":              {250, -35},
+		"riverfarm":            {150, 80},
+		"windrest":             {155, 75},
+		"wistram academy":      {-30, 150},    // island between continents
+		"wistram":              {-30, 150},
+		"az'kerash's castle":   {220, 10},
+		"garden of sanctuary":  {241, -17},
+		"liscor's dungeon":     {242, -22},
+		"new lands":            {200, -100},
+		"house of minos":       {400, -150},   // island nation far east
+		"great plains":         {230, -70},
+		"remendia":             {195, 30},
+		"albez":                {210, 20},
+		"unseen empire":        {145, 85},
+		"laken's empire":       {145, 85},
+		"nombernaught":         {350, -150},   // undersea city
+		"kasignel":             {0, 480},      // land of the dead (far above)
+		"shifthold":            {210, -10},
+	}
+	for name, pos := range moreIzril {
 		izrilSeeds[name] = pos
 	}
 
@@ -128,21 +205,21 @@ func AssignCoordinates(s *store.Store, data *model.AggregatedData) error {
 	}
 
 	// Place remaining locations without containment:
-	// Group by type and place around a default region
-	// Default placement near Liscor/Izril for unplaced locations (most V1 action is here)
+	// Default to Izril region since most story action is there.
+	// Centered around (220, 0) which is mid-Izril, avoiding overlap with other continents.
 	typeDefaults := map[model.LocationType][2]float64{
-		model.LocationContinent:   {0, 0},
-		model.LocationNation:      {0, 0},
-		model.LocationCity:        {80, 0},
-		model.LocationTown:        {60, 30},
-		model.LocationVillage:     {50, 40},
-		model.LocationBuilding:    {92, -28}, // near Liscor
-		model.LocationLandmark:    {100, -10},
-		model.LocationDungeon:     {110, -20},
-		model.LocationBodyOfWater: {70, -30},
-		model.LocationForest:      {60, 50},
-		model.LocationRoad:        {70, 20},
-		model.LocationOther:       {80, 10},
+		model.LocationContinent:   {220, 0},
+		model.LocationNation:      {220, 10},
+		model.LocationCity:        {210, -10},
+		model.LocationTown:        {200, 20},
+		model.LocationVillage:     {195, 30},
+		model.LocationBuilding:    {235, -20}, // near Liscor
+		model.LocationLandmark:    {230, 0},
+		model.LocationDungeon:     {240, -25},
+		model.LocationBodyOfWater: {215, -15},
+		model.LocationForest:      {205, 40},
+		model.LocationRoad:        {210, 15},
+		model.LocationOther:       {220, 5},
 	}
 
 	for _, loc := range data.Locations {

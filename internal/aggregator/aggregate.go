@@ -24,9 +24,33 @@ func Aggregate(s *store.Store) (*model.AggregatedData, error) {
 
 	// Canonical name mapping for well-known locations with many variants
 	canonicalNames := map[string]string{
-		"the inn":           "the wandering inn",
-		"inn":               "the wandering inn",
-		"the wandering inn": "the wandering inn",
+		"the inn":            "the wandering inn",
+		"inn":                "the wandering inn",
+		"the wandering inn":  "the wandering inn",
+		"bloodfields":        "blood fields",
+		"the blood fields":   "blood fields",
+		"the bloodfields":    "blood fields",
+		"high passes":        "the high passes",
+		"the high passes":    "the high passes",
+		"floodplains":        "floodplains of liscor",
+		"the floodplains":    "floodplains of liscor",
+		"flood plains":       "floodplains of liscor",
+		"antinium hive":           "antinium hive",
+		"the antinium hive":       "antinium hive",
+		"the hive":                "antinium hive",
+		"hive":                    "antinium hive",
+		"drath archipelago":       "drath",
+		"the ruins":               "ruins of albez",
+		"ruins":                   "ruins of albez",
+		"[garden of sanctuary]":   "garden of sanctuary",
+		"the garden of sanctuary": "garden of sanctuary",
+		"the garden":              "garden of sanctuary",
+		"great plains of izril":   "great plains",
+		"the great plains":        "great plains",
+		"liscor's dungeon":        "liscor's dungeon",
+		"dungeon":                 "liscor's dungeon",
+		"the dungeon":             "liscor's dungeon",
+		"new lands of izril":      "new lands",
 	}
 
 	// Earth locations to exclude (characters are isekai'd from Earth)
@@ -152,11 +176,59 @@ func Aggregate(s *store.Store) (*model.AggregatedData, error) {
 		"reim": true, "hellios": true, "germina": true, "nerrhavia": true,
 		"nerrhavia's fallen": true, "belchan": true, "jecrass": true,
 		"medain": true, "khelt": true, "quarass": true,
+		"riverfarm": true, "magnolia's estate": true, "lady magnolia's estate": true,
+		"calanfer": true, "noelictus": true, "ailendamus": true,
+		"oteslia": true, "zeres": true, "manus": true, "reizmelt": true,
+		"hectval": true, "wistram academy": true, "wistram": true,
+		"tiqr": true, "pomle": true, "roshal": true, "savere": true,
+		"talenqual": true, "elvallian": true, "gaiil-drome": true,
+		"blighted kingdom": true, "pheislant": true, "desonis": true,
+		"kaliv": true, "erribathe": true, "dawn concordat": true,
+		"house of minos": true, "new lands": true, "great plains": true,
+		"garden of sanctuary": true, "liscor's dungeon": true,
+		"a'ctelios salash": true, "zeikhal": true, "paeth": true,
+		"claiven earth": true, "az'kerash's castle": true,
+		"remendia": true, "albez": true, "runner's guild": true,
+		"windrest": true, "unseen empire": true, "laken's empire": true,
+		"tails and scales": true, "nombernaught": true,
+		"salazsar": true, "fissival": true, "drake lands": true,
+		"human lands": true, "gnoll plains": true,
+		"kasignel": true, "shifthold": true,
+		"walled cities": true, "market street": true,
+		"adventurer's guild": true, "hivelands": true,
+	}
+
+	// Core place keywords - if a containment chain mentions one of these, it's traceable
+	seedKeywords := []string{
+		"izril", "baleros", "chandrar", "terandria", "rhir", "drath",
+		"liscor", "celum", "esthelm", "invrisil", "pallass", "wales",
+		"reim", "riverfarm", "magnolia", "calanfer", "ailendamus",
+		"oteslia", "zeres", "manus", "wistram", "talenqual", "khelt",
+		"noelictus", "pheislant", "hectval", "reizmelt",
+		"remendia", "albez", "pomle", "tiqr", "roshal", "savere",
+		"jecrass", "hellios", "germina", "medain", "belchan",
+		"gaiil-drome", "elvallian", "paeth", "claiven",
+		"blighted", "nerrhavia", "desonis", "kaliv", "erribathe",
+		"laken", "unseen empire", "riverfarm",
+		"nombernaught", "dwarven", "salazsar", "fissival", "drake",
+		"human", "gnoll", "antinium", "goblin",
+	}
+
+	matchesSeed := func(name string) bool {
+		if seededNames[name] {
+			return true
+		}
+		for _, kw := range seedKeywords {
+			if strings.Contains(name, kw) {
+				return true
+			}
+		}
+		return false
 	}
 
 	// Check if a location can trace back to a known position
 	isTraceable := func(id string) bool {
-		if seededNames[id] {
+		if matchesSeed(id) {
 			return true
 		}
 		// Walk containment chain up to 10 levels
@@ -166,7 +238,7 @@ func Aggregate(s *store.Store) (*model.AggregatedData, error) {
 			if !ok {
 				return false
 			}
-			if seededNames[p] {
+			if matchesSeed(p) {
 				return true
 			}
 			cur = p

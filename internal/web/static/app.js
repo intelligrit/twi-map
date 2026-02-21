@@ -368,28 +368,47 @@ function drawLandmasses(coordMap, visibleLocations) {
     }
   });
 
+  // Build continent center coordinates for proximity fallback
+  const continentCenters = {};
+  discoveredContinents.forEach(cName => {
+    const c = coordMap[cName];
+    if (c) continentCenters[cName] = {x: c.x, y: c.y};
+  });
+
   // Assign each visible location to its continent
+  // Priority: 1) containment chain, 2) nearest continent by coordinate proximity
   visibleLocations.forEach(loc => {
     const coord = coordMap[loc.id];
     if (!coord) return;
     if (loc.type === 'continent') return;
 
-    // Try containment chain first
+    // First try containment chain
     let continent = findContinent(loc.id);
 
-    // Fallback: nearest discovered continent by distance
-    if (!continent || !discoveredContinents.has(continent)) {
-      let minDist = Infinity;
-      continent = null;
-      discoveredContinents.forEach(cName => {
-        const cc = coordMap[cName];
-        if (!cc) return;
-        const d = Math.hypot(coord.x - cc.x, coord.y - cc.y);
-        if (d < minDist) { minDist = d; continent = cName; }
-      });
+    // Fallback: assign to nearest continent by coordinate distance
+    // This handles locations with seeded coordinates but no containment data
+    if (!continent) {
+      let bestDist = Infinity;
+      for (const [cName, center] of Object.entries(continentCenters)) {
+        const d = Math.hypot(coord.x - center.x, coord.y - center.y);
+        if (d < bestDist) {
+          bestDist = d;
+          continent = cName;
+        }
+      }
+      // Only accept if reasonably close (within 180 units of the continent center)
+      // This prevents far-flung orphan locations from stretching landmasses
+      if (bestDist > 180) continent = null;
     }
 
     if (continent && discoveredContinents.has(continent)) {
+      // Skip outlier locations that are too far from the continent center.
+      // This prevents misclassified containment data from stretching landmasses.
+      const center = continentCenters[continent];
+      if (center) {
+        const distToCenter = Math.hypot(coord.x - center.x, coord.y - center.y);
+        if (distToCenter > 200) return; // too far — island or misclassified
+      }
       if (!continentPoints[continent]) continentPoints[continent] = [];
       continentPoints[continent].push([coord.y, coord.x]);
     }
@@ -431,7 +450,7 @@ function hashStr(str) {
 
 function organicCoastline(points, continentName) {
   const rng = seededRand(hashStr(continentName));
-  const padding = 35;
+  const padding = 25;
   const numCoastPoints = 64; // how many points around the coastline
 
   // Compute centroid and base radius
@@ -446,8 +465,8 @@ function organicCoastline(points, continentName) {
     const d = Math.hypot(p[1] - cx, p[0] - cy);
     if (d > maxDist) maxDist = d;
   });
-  // Continents with few data points still need a substantial landmass
-  const minRadius = points.length <= 2 ? 60 : 30;
+  // Continents with few data points still need a visible landmass but keep it modest
+  const minRadius = points.length <= 2 ? 40 : 25;
   const baseRadius = Math.max(maxDist + padding, minRadius);
 
   // For each angle, find the farthest point in that direction and use it as the local radius
