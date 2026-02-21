@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TWI Map - The Wandering Inn</title>
+  <link rel="stylesheet" href="lib/leaflet.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="controls">
+    <div id="chapter-control">
+      <label for="chapter-slider">Reading progress:</label>
+      <input type="range" id="chapter-slider" min="0" max="0" value="0">
+      <span id="chapter-label">Loading...</span>
+    </div>
+    <div id="filter-control">
+      <label>Types:</label>
+      <div id="type-filters"></div>
+    </div>
+    <div id="toggle-control">
+      <label><input type="checkbox" id="show-relationships"> Show relationships</label>
+    </div>
+  </div>
+
+  <div id="map-container">
+    <div id="map"></div>
+    <div id="sidebar">
+      <h2>Locations</h2>
+      <div id="location-count"></div>
+      <ul id="location-list"></ul>
+    </div>
+  </div>
+
+  <script src="lib/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,218 @@
+package aggregator
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/robertmeta/twi-map/internal/model"
+	"github.com/robertmeta/twi-map/internal/store"
+)
+
+// Aggregate loads all per-chapter extractions and merges them into a unified dataset.
+func Aggregate(s *store.Store) (*model.AggregatedData, error) {
+	toc, err := s.ReadTOC()
+	if err != nil {
+		return nil, fmt.Errorf("reading TOC: %w", err)
+	}
+
+	type locEntry struct {
+		loc     model.AggregatedLocation
+		indices map[int]bool
+	}
+
+	// Canonical name mapping for well-known locations with many variants
+	canonicalNames := map[string]string{
+		"the inn":           "the wandering inn",
+		"inn":               "the wandering inn",
+		"the wandering inn": "the wandering inn",
+	}
+
+	// Earth locations to exclude (characters are isekai'd from Earth)
+	earthLocations := map[string]bool{
+		"earth": true, "new york": true, "michigan": true, "london": true,
+		"california": true, "oakland": true, "america": true, "japan": true,
+		"china": true, "korea": true, "india": true, "france": true,
+		"germany": true, "england": true, "united states": true,
+		"los angeles": true, "san francisco": true, "chicago": true,
+		"tokyo": true, "paris": true, "rome": true, "boston": true,
+		"seattle": true, "texas": true, "florida": true, "ohio": true,
+		"colorado": true, "europe": true, "asia": true, "africa": true,
+		"south america": true, "north america": true, "australia": true,
+		"canada": true, "mexico": true, "russia": true, "brazil": true,
+		"spain": true, "italy": true, "greece": true,
+	}
+
+	// Simple map: normalized name -> entry. No alias pointer tricks.
+	locMap := make(map[string]*locEntry)
+
+	var allRels []model.AggregatedRelationship
+	relSeen := make(map[string]bool)
+
+	var allContainment []model.Containment
+	contSeen := make(map[string]bool)
+
+	for _, ch := range toc.Chapters {
+		if !s.ExtractionExists(ch.Index) {
+			continue
+		}
+
+		ext, err := s.ReadExtraction(ch.Index)
+		if err != nil {
+			continue
+		}
+
+		for _, loc := range ext.Locations {
+			key := normalizeName(loc.Name)
+			if earthLocations[key] {
+				continue // skip Earth locations
+			}
+			if canon, ok := canonicalNames[key]; ok {
+				key = canon
+			}
+
+			if entry, ok := locMap[key]; ok {
+				entry.indices[ch.Index] = true
+				entry.loc.MentionCount++
+				if len(loc.Description) > len(entry.loc.Description) {
+					entry.loc.Description = loc.Description
+				}
+				if len(loc.VisualDescription) > len(entry.loc.VisualDescription) {
+					entry.loc.VisualDescription = loc.VisualDescription
+				}
+				for _, a := range loc.Aliases {
+					if !containsNorm(entry.loc.Aliases, a) {
+						entry.loc.Aliases = append(entry.loc.Aliases, a)
+					}
+				}
+			} else {
+				displayName := loc.Name
+				// Use proper display name for canonical entries
+				if key == "the wandering inn" {
+					displayName = "The Wandering Inn"
+				}
+				locMap[key] = &locEntry{
+					loc: model.AggregatedLocation{
+						ID:                key,
+						Name:              displayName,
+						Type:              loc.Type,
+						Aliases:           loc.Aliases,
+						Description:       loc.Description,
+						VisualDescription: loc.VisualDescription,
+						FirstChapterIndex: ch.Index,
+						MentionCount:      1,
+					},
+					indices: map[int]bool{ch.Index: true},
+				}
+			}
+		}
+
+		for _, rel := range ext.Relationships {
+			rKey := fmt.Sprintf("%s|%s|%s", normalizeName(rel.From), normalizeName(rel.To), rel.Type)
+			if !relSeen[rKey] {
+				relSeen[rKey] = true
+				allRels = append(allRels, model.AggregatedRelationship{
+					From:              rel.From,
+					To:                rel.To,
+					Type:              rel.Type,
+					Detail:            rel.Detail,
+					FirstChapterIndex: ch.Index,
+				})
+			}
+		}
+
+		for _, c := range ext.Containment {
+			cKey := normalizeName(c.Child) + "|" + normalizeName(c.Parent)
+			if !contSeen[cKey] {
+				contSeen[cKey] = true
+				allContainment = append(allContainment, c)
+			}
+		}
+	}
+
+	// Build containment parent lookup for traceability check
+	parentOf := make(map[string]string)
+	for _, c := range allContainment {
+		parentOf[normalizeName(c.Child)] = normalizeName(c.Parent)
+	}
+
+	// Seed names that count as "traceable" (locations we have known positions for)
+	seededNames := map[string]bool{
+		"izril": true, "baleros": true, "chandrar": true, "terandria": true,
+		"rhir": true, "drath archipelago": true, "drath": true,
+		"liscor": true, "the wandering inn": true, "celum": true,
+		"esthelm": true, "wales": true, "invrisil": true, "pallass": true,
+		"the blood fields": true, "the high passes": true, "high passes": true,
+		"the floodplains": true, "flood plains": true, "floodplains of liscor": true,
+		"first landing": true, "the northern plains": true, "the human lands": true,
+		"the drake lands": true, "great plains of izril": true, "vale forest": true,
+		"blood fields": true, "bloodfields": true, "ruins of liscor": true,
+		"ruins of albez": true, "krakk forest": true,
+		"reim": true, "hellios": true, "germina": true, "nerrhavia": true,
+		"nerrhavia's fallen": true, "belchan": true, "jecrass": true,
+		"medain": true, "khelt": true, "quarass": true,
+	}
+
+	// Check if a location can trace back to a known position
+	isTraceable := func(id string) bool {
+		if seededNames[id] {
+			return true
+		}
+		// Walk containment chain up to 10 levels
+		cur := id
+		for i := 0; i < 10; i++ {
+			p, ok := parentOf[cur]
+			if !ok {
+				return false
+			}
+			if seededNames[p] {
+				return true
+			}
+			cur = p
+		}
+		return false
+	}
+
+	// Build final locations slice — minimum 3 mentions and traceable location
+	var locations []model.AggregatedLocation
+	for _, entry := range locMap {
+		if entry.loc.MentionCount < 3 {
+			continue // not referenced enough
+		}
+		if !isTraceable(entry.loc.ID) {
+			continue // can't place on map
+		}
+		for idx := range entry.indices {
+			entry.loc.ChapterIndices = append(entry.loc.ChapterIndices, idx)
+		}
+		sort.Ints(entry.loc.ChapterIndices)
+		locations = append(locations, entry.loc)
+	}
+
+	// Sort by first appearance
+	sort.Slice(locations, func(i, j int) bool {
+		return locations[i].FirstChapterIndex < locations[j].FirstChapterIndex
+	})
+
+	return &model.AggregatedData{
+		Locations:     locations,
+		Relationships: allRels,
+		Containment:   allContainment,
+		AggregatedAt:  time.Now().UTC().Format(time.RFC3339),
+	}, nil
+}
+
+func normalizeName(name string) string {
+	return strings.ToLower(strings.TrimSpace(name))
+}
+
+func containsNorm(slice []string, s string) bool {
+	norm := normalizeName(s)
+	for _, item := range slice {
+		if normalizeName(item) == norm {
+			return true
+		}
+	}
+	return false
+}

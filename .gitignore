@@ -1,0 +1,6 @@
+data/
+twi-map
+*.exe
+.DS_Store
+internal/web/static/map-base-original.png
+internal/web/static/map-base.png
