@@ -121,12 +121,12 @@ function renderMap() {
   const coordMap = {};
   coordinates.forEach(c => { coordMap[c.location_id] = c; });
 
-  // Draw landmasses
-  drawLandmasses(coordMap);
-
   const visibleLocations = locations.filter(loc =>
     activeTypes.has(loc.type) && coordMap[loc.id] && !hiddenLocations.has(loc.id)
   );
+
+  // Draw landmasses only for discovered continents
+  drawLandmasses(coordMap, visibleLocations);
 
   // Draw relationship lines first (behind markers)
   if (document.getElementById('show-relationships').checked) {
@@ -328,7 +328,7 @@ const CONTINENT_COLORS = {
   'drath archipelago': '#7a9a72',
 };
 
-function drawLandmasses(coordMap) {
+function drawLandmasses(coordMap, visibleLocations) {
   // Build containment tree: child -> continent
   const parentOf = {};
   containment.forEach(c => {
@@ -342,39 +342,46 @@ function drawLandmasses(coordMap) {
     while (cur) {
       if (visited.has(cur)) break;
       visited.add(cur);
-      // Check if this is a known continent
       if (CONTINENT_COLORS[cur]) return cur;
       cur = parentOf[cur];
     }
     return null;
   }
 
-  // Group locations by continent
-  const continentPoints = {};
-  const knownContinents = Object.keys(CONTINENT_COLORS);
-
-  // Add continent center points
-  knownContinents.forEach(cName => {
-    const c = coordMap[cName];
-    if (c) {
-      if (!continentPoints[cName]) continentPoints[cName] = [];
-      continentPoints[cName].push([c.y, c.x]);
+  // Which continents have been discovered (visible in current chapter filter)?
+  const discoveredContinents = new Set();
+  visibleLocations.forEach(loc => {
+    if (loc.type === 'continent' && CONTINENT_COLORS[loc.id]) {
+      discoveredContinents.add(loc.id);
     }
   });
 
-  // Assign each location to a continent
-  locations.forEach(loc => {
+  // Group visible locations by their continent (only for discovered continents)
+  const continentPoints = {};
+  const knownContinents = Object.keys(CONTINENT_COLORS);
+
+  // Seed continent center points (only discovered ones)
+  discoveredContinents.forEach(cName => {
+    const c = coordMap[cName];
+    if (c) {
+      continentPoints[cName] = [[c.y, c.x]];
+    }
+  });
+
+  // Assign each visible location to its continent
+  visibleLocations.forEach(loc => {
     const coord = coordMap[loc.id];
     if (!coord) return;
-    if (loc.type === 'continent') return; // already added above
+    if (loc.type === 'continent') return;
 
     // Try containment chain first
     let continent = findContinent(loc.id);
 
-    // Fallback: nearest continent by distance
-    if (!continent) {
+    // Fallback: nearest discovered continent by distance
+    if (!continent || !discoveredContinents.has(continent)) {
       let minDist = Infinity;
-      knownContinents.forEach(cName => {
+      continent = null;
+      discoveredContinents.forEach(cName => {
         const cc = coordMap[cName];
         if (!cc) return;
         const d = Math.hypot(coord.x - cc.x, coord.y - cc.y);
@@ -382,7 +389,7 @@ function drawLandmasses(coordMap) {
       });
     }
 
-    if (continent) {
+    if (continent && discoveredContinents.has(continent)) {
       if (!continentPoints[continent]) continentPoints[continent] = [];
       continentPoints[continent].push([coord.y, coord.x]);
     }
