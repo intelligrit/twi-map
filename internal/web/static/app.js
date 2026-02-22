@@ -51,9 +51,9 @@ async function init() {
   if (chapters.length > 0) {
     const slider = document.getElementById('chapter-slider');
     slider.max = chapters.length - 1;
-    slider.value = chapters.length - 1;
+    slider.value = 0;
     slider.addEventListener('input', onSliderChange);
-    updateChapterLabel(chapters.length - 1);
+    updateChapterLabel(0);
   }
 
   // Set up type filters
