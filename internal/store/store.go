@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	_ "github.com/marcboeker/go-duckdb"
+	_ "github.com/duckdb/duckdb-go/v2"
 	"github.com/robertmeta/twi-map/internal/model"
 )
 
@@ -362,14 +362,20 @@ func (s *Store) ExtractionExists(chapterIdx int) bool {
 
 // WriteAggregated saves the aggregated location data.
 func (s *Store) WriteAggregated(data *model.AggregatedData) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
 	// Clear previous aggregation
 	for _, tbl := range []string{"locations", "relationships", "containment"} {
-		if _, err := s.DB.Exec(fmt.Sprintf("DELETE FROM %s", tbl)); err != nil {
+		if _, err := tx.Exec(fmt.Sprintf("DELETE FROM %s", tbl)); err != nil {
 			return fmt.Errorf("clearing %s: %w", tbl, err)
 		}
 	}
 
-	// Insert locations one by one (no transaction - DuckDB driver has issues with large txns)
+	// Dedup locations by ID before inserting
 	seenLoc := make(map[string]bool)
 	for _, loc := range data.Locations {
 		if seenLoc[loc.ID] {
@@ -378,30 +384,30 @@ func (s *Store) WriteAggregated(data *model.AggregatedData) error {
 		seenLoc[loc.ID] = true
 		aliases, _ := json.Marshal(loc.Aliases)
 		indices, _ := json.Marshal(loc.ChapterIndices)
-		if _, err := s.DB.Exec("INSERT INTO locations (id, name, type, aliases, description, visual_description, first_chapter_idx, mention_count, chapter_indices) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING",
+		if _, err := tx.Exec("INSERT INTO locations (id, name, type, aliases, description, visual_description, first_chapter_idx, mention_count, chapter_indices) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING",
 			loc.ID, loc.Name, loc.Type, string(aliases), loc.Description, loc.VisualDescription, loc.FirstChapterIndex, loc.MentionCount, string(indices)); err != nil {
 			return fmt.Errorf("inserting location %s: %w", loc.ID, err)
 		}
 	}
 
-	for i, rel := range data.Relationships {
-		if _, err := s.DB.Exec("INSERT INTO relationships (from_loc, to_loc, type, detail, first_chapter_idx) VALUES (?, ?, ?, ?, ?)",
+	for _, rel := range data.Relationships {
+		if _, err := tx.Exec("INSERT INTO relationships (from_loc, to_loc, type, detail, first_chapter_idx) VALUES (?, ?, ?, ?, ?)",
 			rel.From, rel.To, rel.Type, rel.Detail, rel.FirstChapterIndex); err != nil {
-			return fmt.Errorf("inserting relationship %d (%s->%s): %w", i, rel.From, rel.To, err)
+			return err
 		}
 	}
 
-	for i, c := range data.Containment {
-		if _, err := s.DB.Exec("INSERT INTO containment (child, parent) VALUES (?, ?)", c.Child, c.Parent); err != nil {
-			return fmt.Errorf("inserting containment %d (%s in %s): %w", i, c.Child, c.Parent, err)
+	for _, c := range data.Containment {
+		if _, err := tx.Exec("INSERT INTO containment (child, parent) VALUES (?, ?)", c.Child, c.Parent); err != nil {
+			return err
 		}
 	}
 
-	if _, err := s.DB.Exec("INSERT OR REPLACE INTO meta (key, value) VALUES ('aggregated_at', ?)", data.AggregatedAt); err != nil {
+	if _, err := tx.Exec("INSERT OR REPLACE INTO meta (key, value) VALUES ('aggregated_at', ?)", data.AggregatedAt); err != nil {
 		return err
 	}
 
-	return nil
+	return tx.Commit()
 }
 
 // ReadAggregated loads the aggregated location data.
