@@ -10,6 +10,13 @@ import (
 	"github.com/robertmeta/twi-map/internal/store"
 )
 
+const (
+	// minMentions is the minimum number of chapter mentions required for a location to be included.
+	minMentions = 3
+	// maxContainmentDepth is how many levels of parent containment to walk when checking traceability.
+	maxContainmentDepth = 10
+)
+
 // Aggregate loads all per-chapter extractions and merges them into a unified dataset.
 func Aggregate(s *store.Store) (*model.AggregatedData, error) {
 	toc, err := s.ReadTOC()
@@ -24,17 +31,17 @@ func Aggregate(s *store.Store) (*model.AggregatedData, error) {
 
 	// Canonical name mapping for well-known locations with many variants
 	canonicalNames := map[string]string{
-		"the inn":            "the wandering inn",
-		"inn":                "the wandering inn",
-		"the wandering inn":  "the wandering inn",
-		"bloodfields":        "blood fields",
-		"the blood fields":   "blood fields",
-		"the bloodfields":    "blood fields",
-		"high passes":        "the high passes",
-		"the high passes":    "the high passes",
-		"floodplains":        "floodplains of liscor",
-		"the floodplains":    "floodplains of liscor",
-		"flood plains":       "floodplains of liscor",
+		"the inn":                 "the wandering inn",
+		"inn":                     "the wandering inn",
+		"the wandering inn":       "the wandering inn",
+		"bloodfields":             "blood fields",
+		"the blood fields":        "blood fields",
+		"the bloodfields":         "blood fields",
+		"high passes":             "the high passes",
+		"the high passes":         "the high passes",
+		"floodplains":             "floodplains of liscor",
+		"the floodplains":         "floodplains of liscor",
+		"flood plains":            "floodplains of liscor",
 		"antinium hive":           "antinium hive",
 		"the antinium hive":       "antinium hive",
 		"the hive":                "antinium hive",
@@ -42,7 +49,7 @@ func Aggregate(s *store.Store) (*model.AggregatedData, error) {
 		"drath archipelago":       "drath",
 		"the ruins":               "ruins of albez",
 		"ruins":                   "ruins of albez",
-		"[garden of sanctuary]":   "garden of sanctuary",
+		"garden of sanctuary":     "garden of sanctuary",
 		"the garden of sanctuary": "garden of sanctuary",
 		"the garden":              "garden of sanctuary",
 		"great plains of izril":   "great plains",
@@ -53,7 +60,8 @@ func Aggregate(s *store.Store) (*model.AggregatedData, error) {
 		"new lands of izril":      "new lands",
 	}
 
-	// Earth locations to exclude (characters are isekai'd from Earth)
+	// Earth locations to exclude — TWI characters are transported from modern Earth
+	// to Innworld, so real-world place names appear in dialogue but aren't map locations.
 	earthLocations := map[string]bool{
 		"earth": true, "new york": true, "michigan": true, "london": true,
 		"california": true, "oakland": true, "america": true, "japan": true,
@@ -111,15 +119,10 @@ func Aggregate(s *store.Store) (*model.AggregatedData, error) {
 					}
 				}
 			} else {
-				displayName := loc.Name
-				// Use proper display name for canonical entries
-				if key == "the wandering inn" {
-					displayName = "The Wandering Inn"
-				}
 				locMap[key] = &locEntry{
 					loc: model.AggregatedLocation{
 						ID:                key,
-						Name:              displayName,
+						Name:              toDisplayName(key),
 						Type:              loc.Type,
 						Aliases:           loc.Aliases,
 						Description:       loc.Description,
@@ -133,12 +136,14 @@ func Aggregate(s *store.Store) (*model.AggregatedData, error) {
 		}
 
 		for _, rel := range ext.Relationships {
-			rKey := fmt.Sprintf("%s|%s|%s", normalizeName(rel.From), normalizeName(rel.To), rel.Type)
+			fromKey := canonicalize(normalizeName(rel.From), canonicalNames)
+			toKey := canonicalize(normalizeName(rel.To), canonicalNames)
+			rKey := fmt.Sprintf("%s|%s|%s", fromKey, toKey, rel.Type)
 			if !relSeen[rKey] {
 				relSeen[rKey] = true
 				allRels = append(allRels, model.AggregatedRelationship{
-					From:              rel.From,
-					To:                rel.To,
+					From:              toDisplayName(fromKey),
+					To:                toDisplayName(toKey),
 					Type:              rel.Type,
 					Detail:            rel.Detail,
 					FirstChapterIndex: ch.Index,
@@ -147,10 +152,15 @@ func Aggregate(s *store.Store) (*model.AggregatedData, error) {
 		}
 
 		for _, c := range ext.Containment {
-			cKey := normalizeName(c.Child) + "|" + normalizeName(c.Parent)
+			childKey := canonicalize(normalizeName(c.Child), canonicalNames)
+			parentKey := canonicalize(normalizeName(c.Parent), canonicalNames)
+			cKey := childKey + "|" + parentKey
 			if !contSeen[cKey] {
 				contSeen[cKey] = true
-				allContainment = append(allContainment, c)
+				allContainment = append(allContainment, model.Containment{
+					Child:  toDisplayName(childKey),
+					Parent: toDisplayName(parentKey),
+				})
 			}
 		}
 	}
@@ -231,9 +241,8 @@ func Aggregate(s *store.Store) (*model.AggregatedData, error) {
 		if matchesSeed(id) {
 			return true
 		}
-		// Walk containment chain up to 10 levels
 		cur := id
-		for i := 0; i < 10; i++ {
+		for i := 0; i < maxContainmentDepth; i++ {
 			p, ok := parentOf[cur]
 			if !ok {
 				return false
@@ -246,10 +255,9 @@ func Aggregate(s *store.Store) (*model.AggregatedData, error) {
 		return false
 	}
 
-	// Build final locations slice — minimum 3 mentions and traceable location
 	var locations []model.AggregatedLocation
 	for _, entry := range locMap {
-		if entry.loc.MentionCount < 3 {
+		if entry.loc.MentionCount < minMentions {
 			continue // not referenced enough
 		}
 		if !isTraceable(entry.loc.ID) {
@@ -275,8 +283,29 @@ func Aggregate(s *store.Store) (*model.AggregatedData, error) {
 	}, nil
 }
 
+// canonicalize applies the canonical name map, returning the canonical form or the original.
+func canonicalize(name string, canonicalNames map[string]string) string {
+	if canon, ok := canonicalNames[name]; ok {
+		return canon
+	}
+	return name
+}
+
 func normalizeName(name string) string {
+	// Strip square brackets — LLM sometimes wraps location names in them
+	name = strings.NewReplacer("[", "", "]", "").Replace(name)
 	return strings.ToLower(strings.TrimSpace(name))
+}
+
+// toDisplayName converts a normalized (lowercase) name to title case for display.
+func toDisplayName(name string) string {
+	words := strings.Fields(name)
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 func containsNorm(slice []string, s string) bool {

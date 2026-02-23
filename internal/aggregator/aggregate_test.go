@@ -92,16 +92,19 @@ func TestAggregate(t *testing.T) {
 		t.Errorf("expected at least 3 locations, got %d", len(data.Locations))
 	}
 
-	// Find Liscor
+	// Find Liscor — display name should be title-cased from the normalized key
 	var liscor *model.AggregatedLocation
 	for i, loc := range data.Locations {
-		if loc.Name == "Liscor" {
+		if loc.ID == "liscor" {
 			liscor = &data.Locations[i]
 			break
 		}
 	}
 	if liscor == nil {
 		t.Fatal("Liscor not found in aggregated data")
+	}
+	if liscor.Name != "Liscor" {
+		t.Errorf("expected display name 'Liscor', got %q", liscor.Name)
 	}
 	if liscor.MentionCount != 3 {
 		t.Errorf("expected Liscor mention count 3, got %d", liscor.MentionCount)
@@ -114,14 +117,45 @@ func TestAggregate(t *testing.T) {
 		t.Errorf("expected longer description, got %q", liscor.Description)
 	}
 
-	// Check relationships preserved
-	if len(data.Relationships) != 1 {
-		t.Errorf("expected 1 relationship, got %d", len(data.Relationships))
+	// The Wandering Inn should get title-cased canonical name
+	var twi *model.AggregatedLocation
+	for i, loc := range data.Locations {
+		if loc.ID == "the wandering inn" {
+			twi = &data.Locations[i]
+			break
+		}
+	}
+	if twi == nil {
+		t.Fatal("The Wandering Inn not found in aggregated data")
+	}
+	if twi.Name != "The Wandering Inn" {
+		t.Errorf("expected display name 'The Wandering Inn', got %q", twi.Name)
 	}
 
-	// Check containment preserved
+	// Relationships should have title-cased display names
+	if len(data.Relationships) != 1 {
+		t.Errorf("expected 1 relationship, got %d", len(data.Relationships))
+	} else {
+		rel := data.Relationships[0]
+		if rel.From != "The Wandering Inn" {
+			t.Errorf("expected relationship from 'The Wandering Inn', got %q", rel.From)
+		}
+		if rel.To != "Liscor" {
+			t.Errorf("expected relationship to 'Liscor', got %q", rel.To)
+		}
+	}
+
+	// Containment should have title-cased display names
 	if len(data.Containment) != 1 {
 		t.Errorf("expected 1 containment, got %d", len(data.Containment))
+	} else {
+		c := data.Containment[0]
+		if c.Child != "Liscor" {
+			t.Errorf("expected containment child 'Liscor', got %q", c.Child)
+		}
+		if c.Parent != "Izril" {
+			t.Errorf("expected containment parent 'Izril', got %q", c.Parent)
+		}
 	}
 }
 
@@ -132,11 +166,33 @@ func TestNormalizeName(t *testing.T) {
 		{"Liscor", "liscor"},
 		{"  The Wandering Inn  ", "the wandering inn"},
 		{"IZRIL", "izril"},
+		{"[Garden of Sanctuary]", "garden of sanctuary"},
+		{"[Foo]", "foo"},
+		{"no brackets", "no brackets"},
 	}
 	for _, tt := range tests {
 		got := normalizeName(tt.input)
 		if got != tt.want {
 			t.Errorf("normalizeName(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestToDisplayName(t *testing.T) {
+	tests := []struct {
+		input, want string
+	}{
+		{"liscor", "Liscor"},
+		{"the wandering inn", "The Wandering Inn"},
+		{"garden of sanctuary", "Garden Of Sanctuary"},
+		{"a'ctelios salash", "A'ctelios Salash"},
+		{"blood fields", "Blood Fields"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		got := toDisplayName(tt.input)
+		if got != tt.want {
+			t.Errorf("toDisplayName(%q) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }

@@ -14,8 +14,8 @@ type Chapter struct {
 
 // TOC is the full table of contents.
 type TOC struct {
-	Chapters []Chapter `json:"chapters"`
-	ScrapedAt string   `json:"scraped_at"`
+	Chapters  []Chapter `json:"chapters"`
+	ScrapedAt string    `json:"scraped_at"`
 }
 
 // LocationType classifies extracted locations.
@@ -41,12 +41,12 @@ type RelationshipType string
 
 const (
 	RelDistance    RelationshipType = "distance"
-	RelTravelTime RelationshipType = "travel_time"
-	RelDirection  RelationshipType = "direction"
+	RelTravelTime  RelationshipType = "travel_time"
+	RelDirection   RelationshipType = "direction"
 	RelContainment RelationshipType = "containment"
-	RelAdjacency  RelationshipType = "adjacency"
-	RelRoute      RelationshipType = "route"
-	RelRelative   RelationshipType = "relative"
+	RelAdjacency   RelationshipType = "adjacency"
+	RelRoute       RelationshipType = "route"
+	RelRelative    RelationshipType = "relative"
 )
 
 // ExtractedLocation is a location found in a single chapter.

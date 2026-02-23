@@ -2,5 +2,6 @@ data/
 twi-map
 *.exe
 .DS_Store
+.claude/
 internal/web/static/map-base-original.png
 internal/web/static/map-base.png

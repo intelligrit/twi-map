@@ -242,7 +242,8 @@ func (s *Store) WriteExtraction(ext *model.ChapterExtraction) error {
 	}
 	defer tx.Rollback()
 
-	// Clear any previous extraction for this chapter
+	// Clear any previous extraction for this chapter.
+	// Table names are compile-time constants, not user input.
 	for _, tbl := range []string{"extracted_locations", "extracted_relationships", "extracted_containment", "extraction_meta"} {
 		if _, err := tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE chapter_idx = ?", tbl), ext.ChapterIndex); err != nil {
 			return err
@@ -368,7 +369,7 @@ func (s *Store) WriteAggregated(data *model.AggregatedData) error {
 	}
 	defer tx.Rollback()
 
-	// Clear previous aggregation
+	// Clear previous aggregation. Table names are compile-time constants, not user input.
 	for _, tbl := range []string{"locations", "relationships", "containment"} {
 		if _, err := tx.Exec(fmt.Sprintf("DELETE FROM %s", tbl)); err != nil {
 			return fmt.Errorf("clearing %s: %w", tbl, err)
@@ -437,6 +438,9 @@ func (s *Store) ReadAggregated() (*model.AggregatedData, error) {
 		}
 		data.Locations = append(data.Locations, loc)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("reading locations: %w", err)
+	}
 
 	// Relationships
 	relRows, err := s.DB.Query("SELECT from_loc, to_loc, type, detail, first_chapter_idx FROM relationships ORDER BY first_chapter_idx")
@@ -451,6 +455,9 @@ func (s *Store) ReadAggregated() (*model.AggregatedData, error) {
 		}
 		data.Relationships = append(data.Relationships, rel)
 	}
+	if err := relRows.Err(); err != nil {
+		return nil, fmt.Errorf("reading relationships: %w", err)
+	}
 
 	// Containment
 	cRows, err := s.DB.Query("SELECT child, parent FROM containment")
@@ -464,6 +471,9 @@ func (s *Store) ReadAggregated() (*model.AggregatedData, error) {
 			return nil, err
 		}
 		data.Containment = append(data.Containment, c)
+	}
+	if err := cRows.Err(); err != nil {
+		return nil, fmt.Errorf("reading containment: %w", err)
 	}
 
 	var aggAt sql.NullString

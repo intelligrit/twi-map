@@ -10,7 +10,11 @@ import (
 	"os"
 )
 
-const anthropicAPI = "https://api.anthropic.com/v1/messages"
+const (
+	anthropicAPI     = "https://api.anthropic.com/v1/messages"
+	anthropicVersion = "2023-06-01"
+	maxOutputTokens  = 64000 // maximum tokens in the extraction response
+)
 
 // Client calls the Anthropic Messages API.
 type Client struct {
@@ -71,7 +75,7 @@ func (c *Client) Extract(ctx context.Context, chapterTitle, chapterText string) 
 
 	reqBody := apiRequest{
 		Model:     c.Model,
-		MaxTokens: 64000,
+		MaxTokens: maxOutputTokens,
 		System:    systemPrompt,
 		Messages: []apiMessage{
 			{Role: "user", Content: prompt},
@@ -91,7 +95,7 @@ func (c *Client) Extract(ctx context.Context, chapterTitle, chapterText string) 
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-key", c.APIKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("anthropic-version", anthropicVersion)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -104,6 +108,10 @@ func (c *Client) Extract(ctx context.Context, chapterTitle, chapterText string) 
 		return "", apiUsage{}, fmt.Errorf("reading response: %w", err)
 	}
 
+	if resp.StatusCode != 200 {
+		return "", apiUsage{}, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
 	var apiResp apiResponse
 	if err := json.Unmarshal(respBody, &apiResp); err != nil {
 		return "", apiUsage{}, fmt.Errorf("parsing response: %w", err)
@@ -111,10 +119,6 @@ func (c *Client) Extract(ctx context.Context, chapterTitle, chapterText string) 
 
 	if apiResp.Error != nil {
 		return "", apiUsage{}, fmt.Errorf("API error (%s): %s", apiResp.Error.Type, apiResp.Error.Message)
-	}
-
-	if resp.StatusCode != 200 {
-		return "", apiUsage{}, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	if len(apiResp.Content) == 0 {

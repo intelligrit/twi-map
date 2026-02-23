@@ -16,13 +16,21 @@ const TYPE_COLORS = {
 // Which types get permanent text labels on the map
 const LABELED_TYPES = new Set(['continent', 'nation', 'city', 'town', 'body_of_water', 'forest', 'landmark', 'dungeon', 'building']);
 
-let map, chapters = [], locations = [], relationships = [], coordinates = [], containment = [];
+let twiMap, chapters = [], locations = [], relationships = [], coordinates = [], containment = [];
 let markerLayer, lineLayer, labelLayer, landLayer;
 let activeTypes = new Set(Object.keys(TYPE_COLORS));
 let hiddenLocations = new Set();
+let sliderDebounceTimer = null;
+
+// Escape HTML to prevent XSS from LLM-generated location data.
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
 
 async function init() {
-  map = L.map('map', {
+  twiMap = L.map('map', {
     crs: L.CRS.Simple,
     center: [0, 0],
     zoom: 1,
@@ -32,21 +40,26 @@ async function init() {
 
   // Coordinate space bounds
   const bounds = [[-512, -512], [512, 512]];
-  map.fitBounds(bounds);
+  twiMap.fitBounds(bounds);
 
   // Create layer groups (land under everything else)
-  landLayer = L.layerGroup().addTo(map);
-  lineLayer = L.layerGroup().addTo(map);
-  markerLayer = L.layerGroup().addTo(map);
-  labelLayer = L.layerGroup().addTo(map);
+  landLayer = L.layerGroup().addTo(twiMap);
+  lineLayer = L.layerGroup().addTo(twiMap);
+  markerLayer = L.layerGroup().addTo(twiMap);
+  labelLayer = L.layerGroup().addTo(twiMap);
 
   // Scale labels with zoom
-  map.on('zoomend', updateLabelScale);
+  twiMap.on('zoomend', updateLabelScale);
   updateLabelScale();
 
   // Load chapters for the slider
-  const chapResp = await fetch('/api/chapters');
-  chapters = await chapResp.json();
+  try {
+    const chapResp = await fetch('/api/chapters');
+    chapters = await chapResp.json();
+  } catch (e) {
+    document.getElementById('chapter-label').textContent = 'Error loading chapters';
+    return;
+  }
 
   if (chapters.length > 0) {
     const slider = document.getElementById('chapter-slider');
@@ -92,17 +105,22 @@ async function init() {
 async function loadData() {
   const through = document.getElementById('chapter-slider').value;
 
-  const [locResp, relResp, coordResp, contResp] = await Promise.all([
-    fetch('/api/locations?through=' + through),
-    fetch('/api/relationships?through=' + through),
-    fetch('/api/coordinates'),
-    fetch('/api/containment')
-  ]);
+  try {
+    const [locResp, relResp, coordResp, contResp] = await Promise.all([
+      fetch('/api/locations?through=' + through),
+      fetch('/api/relationships?through=' + through),
+      fetch('/api/coordinates'),
+      fetch('/api/containment')
+    ]);
 
-  locations = await locResp.json();
-  relationships = await relResp.json();
-  coordinates = await coordResp.json();
-  containment = await contResp.json();
+    locations = await locResp.json();
+    relationships = await relResp.json();
+    coordinates = await coordResp.json();
+    containment = await contResp.json();
+  } catch (e) {
+    console.error('Failed to load map data:', e);
+    return;
+  }
 
   if (!locations) locations = [];
   if (!relationships) relationships = [];
@@ -177,14 +195,14 @@ function renderMap() {
     }
 
     marker.bindPopup(`
-      <h3>${loc.name}</h3>
-      <div class="popup-type">${loc.type.replace('_', ' ')}</div>
-      <div class="popup-desc">${loc.description || 'No description'}</div>
-      ${loc.visual_description ? `<div class="popup-visual">${loc.visual_description}</div>` : ''}
+      <h3>${escapeHtml(loc.name)}</h3>
+      <div class="popup-type">${escapeHtml(loc.type.replace('_', ' '))}</div>
+      <div class="popup-desc">${escapeHtml(loc.description) || 'No description'}</div>
+      ${loc.visual_description ? `<div class="popup-visual">${escapeHtml(loc.visual_description)}</div>` : ''}
       <div class="popup-meta">
         First mentioned: Chapter ${loc.first_chapter_index}<br>
         Mentions: ${loc.mention_count}
-        ${loc.aliases && loc.aliases.length ? '<br>Aliases: ' + loc.aliases.join(', ') : ''}
+        ${loc.aliases && loc.aliases.length ? '<br>Aliases: ' + escapeHtml(loc.aliases.join(', ')) : ''}
       </div>
     `);
 
@@ -195,7 +213,7 @@ function renderMap() {
       const label = L.marker([coord.y, coord.x], {
         icon: L.divIcon({
           className: 'map-label' + (isWanderingInn ? ' inn-label' : ''),
-          html: `<span style="font-size:${fontSize}px;color:${labelColor}">${loc.name}</span>`,
+          html: `<span style="font-size:${fontSize}px;color:${labelColor}">${escapeHtml(loc.name)}</span>`,
           iconSize: [0, 0],
           iconAnchor: isWanderingInn ? [0, -20] : [0, -(size + 4)]
         }),
@@ -254,7 +272,7 @@ function updateSidebar(visibleLocations, coordMap) {
         renderMap();
       } else if (coord) {
         // Click elsewhere: pan to location
-        map.setView([coord.y, coord.x], 4);
+        twiMap.setView([coord.y, coord.x], 4);
       }
     });
 
@@ -265,7 +283,9 @@ function updateSidebar(visibleLocations, coordMap) {
 function onSliderChange() {
   const val = parseInt(document.getElementById('chapter-slider').value);
   updateChapterLabel(val);
-  loadData();
+  // Debounce data loading to avoid flooding the server when dragging the slider.
+  clearTimeout(sliderDebounceTimer);
+  sliderDebounceTimer = setTimeout(loadData, 150);
 }
 
 function updateChapterLabel(index) {
@@ -303,7 +323,7 @@ function labelSize(type) {
 }
 
 function updateLabelScale() {
-  const zoom = map.getZoom();
+  const zoom = twiMap.getZoom();
   // Gentle scale: 1x at zoom 1, ~1.5x at zoom 4, ~2x at zoom 7
   const scale = 1 + Math.max(0, zoom - 1) * 0.2;
   document.documentElement.style.setProperty('--label-scale', Math.max(scale, 0.6));
@@ -433,7 +453,8 @@ function drawLandmasses(coordMap, visibleLocations) {
   }
 }
 
-// Seeded random for deterministic coastlines
+// Seeded pseudo-random number generator (standard LCG parameters from Numerical Recipes).
+// Produces deterministic coastlines — same continent name always generates the same shape.
 function seededRand(seed) {
   let s = seed;
   return function() {
@@ -517,26 +538,6 @@ function organicCoastline(points, continentName) {
   }
 
   return coastline;
-}
-
-function convexHull(points) {
-  const pts = points.map(p => ({x: p[1], y: p[0]}));
-  pts.sort((a, b) => a.x - b.x || a.y - b.y);
-  function cross(O, A, B) {
-    return (A.x - O.x) * (B.y - O.y) - (A.y - O.y) * (B.x - O.x);
-  }
-  const lower = [];
-  for (const p of pts) {
-    while (lower.length >= 2 && cross(lower[lower.length-2], lower[lower.length-1], p) <= 0) lower.pop();
-    lower.push(p);
-  }
-  const upper = [];
-  for (let i = pts.length - 1; i >= 0; i--) {
-    while (upper.length >= 2 && cross(upper[upper.length-2], upper[upper.length-1], upper[upper.length-1]) <= 0) upper.pop();
-    upper.push(pts[i]);
-  }
-  upper.pop(); lower.pop();
-  return lower.concat(upper).map(p => [p.y, p.x]);
 }
 
 function darkenColor(hex, amount) {

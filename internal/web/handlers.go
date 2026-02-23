@@ -105,10 +105,11 @@ func (s *Server) handleContainment(w http.ResponseWriter, r *http.Request) {
 
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	// Wildcard CORS — this is a local development tool, not a public API.
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	if v == nil {
-		w.Write([]byte("[]"))
+		_, _ = w.Write([]byte("[]"))
 		return
 	}
-	json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(v)
 }

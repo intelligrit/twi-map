@@ -35,17 +35,17 @@ func AssignCoordinates(s *store.Store, data *model.AggregatedData) error {
 	//   Chandrar (lower-left)      Drath (far right)
 	//        Baleros (bottom)
 	seeds := map[string][2]float64{
-		"izril":             {250, 0},       // center-right, large continent
-		"chandrar":          {-250, -100},   // lower-left, desert continent
-		"terandria":         {-250, 300},    // upper-left
-		"baleros":           {-150, -400},   // bottom-center
-		"rhir":              {350, 350},     // upper-right
-		"drath archipelago": {480, 0},       // far right islands
+		"izril":             {250, 0},     // center-right, large continent
+		"chandrar":          {-250, -100}, // lower-left, desert continent
+		"terandria":         {-250, 300},  // upper-left
+		"baleros":           {-150, -400}, // bottom-center
+		"rhir":              {350, 350},   // upper-right
+		"drath archipelago": {480, 0},     // far right islands
 		"drath":             {480, 0},
 	}
 
 	// Izril locations (center-right region, ~100-350 x, ~-120 to 150 y)
-	izrilSeeds := map[string][2]float64{
+	locationSeeds := map[string][2]float64{
 		"liscor":                {240, -20},
 		"the wandering inn":     {241, -18},
 		"the inn":               {241, -18},
@@ -76,52 +76,52 @@ func AssignCoordinates(s *store.Store, data *model.AggregatedData) error {
 
 	// Chandrar nations (lower-left, ~-350 to -150 x, ~-200 to 0 y)
 	chandrarSeeds := map[string][2]float64{
-		"reim":                 {-220, -80},
-		"hellios":              {-230, -100},
-		"germina":              {-270, -120},
-		"nerrhavia":            {-280, -80},
-		"nerrhavia's fallen":   {-280, -80},
-		"belchan":              {-240, -60},
-		"jecrass":              {-210, -110},
-		"medain":               {-270, -60},
-		"khelt":                {-200, -50},
-		"quarass":              {-250, -110},
-		"tiqr":                 {-300, -110},
-		"pomle":                {-230, -130},
-		"roshal":               {-310, -90},
-		"savere":               {-260, -140},
-		"a'ctelios salash":     {-290, -70},
-		"zeikhal":              {-240, -90},
+		"reim":               {-220, -80},
+		"hellios":            {-230, -100},
+		"germina":            {-270, -120},
+		"nerrhavia":          {-280, -80},
+		"nerrhavia's fallen": {-280, -80},
+		"belchan":            {-240, -60},
+		"jecrass":            {-210, -110},
+		"medain":             {-270, -60},
+		"khelt":              {-200, -50},
+		"quarass":            {-250, -110},
+		"tiqr":               {-300, -110},
+		"pomle":              {-230, -130},
+		"roshal":             {-310, -90},
+		"savere":             {-260, -140},
+		"a'ctelios salash":   {-290, -70},
+		"zeikhal":            {-240, -90},
 	}
 	for name, pos := range chandrarSeeds {
-		izrilSeeds[name] = pos
+		locationSeeds[name] = pos
 	}
 
 	// Terandria nations (upper-left, ~-350 to -150 x, ~200 to 400 y)
 	terandriaSeeds := map[string][2]float64{
-		"ailendamus":       {-280, 330},
-		"calanfer":         {-230, 310},
-		"pheislant":        {-260, 280},
-		"noelictus":        {-220, 350},
-		"dawn concordat":   {-240, 300},
-		"desonis":          {-270, 310},
-		"kaliv":            {-250, 320},
-		"erribathe":        {-210, 320},
+		"ailendamus":     {-280, 330},
+		"calanfer":       {-230, 310},
+		"pheislant":      {-260, 280},
+		"noelictus":      {-220, 350},
+		"dawn concordat": {-240, 300},
+		"desonis":        {-270, 310},
+		"kaliv":          {-250, 320},
+		"erribathe":      {-210, 320},
 	}
 	for name, pos := range terandriaSeeds {
-		izrilSeeds[name] = pos
+		locationSeeds[name] = pos
 	}
 
 	// Baleros locations (bottom, ~-250 to -50 x, ~-500 to -300 y)
 	balerosSeeds := map[string][2]float64{
-		"talenqual":        {-120, -380},
-		"elvallian":        {-170, -420},
-		"gaiil-drome":      {-190, -390},
-		"claiven earth":    {-160, -360},
-		"paeth":            {-140, -410},
+		"talenqual":     {-120, -380},
+		"elvallian":     {-170, -420},
+		"gaiil-drome":   {-190, -390},
+		"claiven earth": {-160, -360},
+		"paeth":         {-140, -410},
 	}
 	for name, pos := range balerosSeeds {
-		izrilSeeds[name] = pos
+		locationSeeds[name] = pos
 	}
 
 	// Rhir (upper-right, ~280-420 x, ~280-420 y)
@@ -129,38 +129,38 @@ func AssignCoordinates(s *store.Store, data *model.AggregatedData) error {
 		"blighted kingdom": {360, 340},
 	}
 	for name, pos := range rhirSeeds {
-		izrilSeeds[name] = pos
+		locationSeeds[name] = pos
 	}
 
 	// More Izril cities (within Izril's region)
 	moreIzril := map[string][2]float64{
-		"oteslia":              {270, -60},
-		"zeres":                {290, -40},
-		"manus":                {310, -20},
-		"salazsar":             {280, -30},
-		"fissival":             {300, -50},
-		"reizmelt":             {185, 70},
-		"hectval":              {250, -35},
-		"riverfarm":            {150, 80},
-		"windrest":             {155, 75},
-		"wistram academy":      {-30, 150},    // island between continents
-		"wistram":              {-30, 150},
-		"az'kerash's castle":   {220, 10},
-		"garden of sanctuary":  {241, -17},
-		"liscor's dungeon":     {242, -22},
-		"new lands":            {200, -100},
-		"house of minos":       {400, -150},   // island nation far east
-		"great plains":         {230, -70},
-		"remendia":             {195, 30},
-		"albez":                {210, 20},
-		"unseen empire":        {145, 85},
-		"laken's empire":       {145, 85},
-		"nombernaught":         {350, -150},   // undersea city
-		"kasignel":             {0, 480},      // land of the dead (far above)
-		"shifthold":            {210, -10},
+		"oteslia":             {270, -60},
+		"zeres":               {290, -40},
+		"manus":               {310, -20},
+		"salazsar":            {280, -30},
+		"fissival":            {300, -50},
+		"reizmelt":            {185, 70},
+		"hectval":             {250, -35},
+		"riverfarm":           {150, 80},
+		"windrest":            {155, 75},
+		"wistram academy":     {-30, 150}, // island between continents
+		"wistram":             {-30, 150},
+		"az'kerash's castle":  {220, 10},
+		"garden of sanctuary": {241, -17},
+		"liscor's dungeon":    {242, -22},
+		"new lands":           {200, -100},
+		"house of minos":      {400, -150}, // island nation far east
+		"great plains":        {230, -70},
+		"remendia":            {195, 30},
+		"albez":               {210, 20},
+		"unseen empire":       {145, 85},
+		"laken's empire":      {145, 85},
+		"nombernaught":        {350, -150}, // undersea city
+		"kasignel":            {0, 480},    // land of the dead (far above)
+		"shifthold":           {210, -10},
 	}
 	for name, pos := range moreIzril {
-		izrilSeeds[name] = pos
+		locationSeeds[name] = pos
 	}
 
 	for name, pos := range seeds {
@@ -171,7 +171,7 @@ func AssignCoordinates(s *store.Store, data *model.AggregatedData) error {
 			}
 		}
 	}
-	for name, pos := range izrilSeeds {
+	for name, pos := range locationSeeds {
 		if _, ok := coordMap[name]; !ok {
 			coordMap[name] = model.Coordinate{
 				LocationID: name, X: pos[0], Y: pos[1],
@@ -252,6 +252,8 @@ func AssignCoordinates(s *store.Store, data *model.AggregatedData) error {
 	return nil
 }
 
+// spreadForType returns the jitter radius (in the [-512,512] coordinate space)
+// for placing locations near their parent. Larger types get more spread.
 func spreadForType(t model.LocationType) float64 {
 	switch t {
 	case model.LocationContinent:
@@ -271,12 +273,16 @@ func spreadForType(t model.LocationType) float64 {
 	}
 }
 
+// hashFloat produces a deterministic offset in [-spread, +spread] for placing
+// a location. The same name+axis always produces the same offset.
 func hashFloat(name, axis string, spread float64) float64 {
 	h := simpleHash(name + ":" + axis)
 	// Map to [-spread, +spread]
 	return (float64(h%1000)/500.0 - 1.0) * spread
 }
 
+// simpleHash is a basic polynomial hash for deterministic coordinate jitter.
+// Not cryptographic — only needs stable distribution for map placement.
 func simpleHash(s string) int {
 	h := 0
 	for _, c := range s {
