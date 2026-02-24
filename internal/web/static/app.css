@@ -45,6 +45,15 @@ body {
   min-width: 300px;
 }
 
+#volume-select {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  border: 1px solid #0f3460;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 14px;
+}
+
 #chapter-slider {
   flex: 1;
   accent-color: #e94560;

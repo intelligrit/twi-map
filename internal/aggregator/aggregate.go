@@ -146,6 +146,7 @@ func Aggregate(s *store.Store) (*model.AggregatedData, error) {
 					To:                toDisplayName(toKey),
 					Type:              rel.Type,
 					Detail:            rel.Detail,
+					Quote:             rel.Quote,
 					FirstChapterIndex: ch.Index,
 				})
 			}

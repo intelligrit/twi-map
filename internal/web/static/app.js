@@ -26,6 +26,8 @@ let hiddenLocations = new Set();
 let sliderDebounceTimer = null;
 // Map from location ID to its Leaflet marker, for keyboard-driven popup opening
 let markerById = {};
+// Volume boundaries: [{volume, firstIndex, lastIndex}], built from chapter data
+let volumeBounds = [];
 
 // Escape HTML to prevent XSS from LLM-generated location data.
 function escapeHtml(str) {
@@ -72,11 +74,28 @@ async function init() {
   }
 
   if (chapters.length > 0) {
+    // Build volume boundaries for jump navigation
+    buildVolumeBounds();
+
     const slider = document.getElementById('chapter-slider');
     slider.max = chapters.length - 1;
     slider.value = 0;
     slider.addEventListener('input', onSliderChange);
+    slider.addEventListener('keydown', onSliderKeydown);
     updateChapterLabel(0);
+
+    // Populate volume dropdown
+    const volSelect = document.getElementById('volume-select');
+    volumeBounds.forEach(vb => {
+      const opt = document.createElement('option');
+      opt.value = vb.firstIndex;
+      opt.textContent = vb.label;
+      volSelect.appendChild(opt);
+    });
+    volSelect.addEventListener('change', () => {
+      slider.value = volSelect.value;
+      onSliderChange();
+    });
   }
 
   // Set up type filters
@@ -169,10 +188,18 @@ function renderMap() {
       if (fromCoord && toCoord) {
         const line = L.polyline(
           [[fromCoord.y, fromCoord.x], [toCoord.y, toCoord.x]],
-          { color: '#ffffff20', weight: 1, dashArray: '4 4' }
+          { color: '#ffffff40', weight: 2, dashArray: '4 4' }
         ).addTo(lineLayer);
 
-        line.bindPopup(`<b>${escapeHtml(rel.from)}</b> &rarr; <b>${escapeHtml(rel.to)}</b><br>${escapeHtml(rel.detail || rel.type)}`);
+        const chTitle = chapters[rel.first_chapter_index]
+          ? chapters[rel.first_chapter_index].web_title : '';
+        let popup = `<b>${escapeHtml(rel.from)}</b> &rarr; <b>${escapeHtml(rel.to)}</b>`;
+        popup += `<div class="popup-type">${escapeHtml(rel.type)}: ${escapeHtml(rel.detail)}</div>`;
+        if (rel.quote) {
+          popup += `<div class="popup-visual">&ldquo;${escapeHtml(rel.quote)}&rdquo;</div>`;
+        }
+        popup += `<div class="popup-meta">First mentioned: Ch ${rel.first_chapter_index + 1}${chTitle ? ' — ' + escapeHtml(chTitle) : ''}</div>`;
+        line.bindPopup(popup, { maxWidth: 350 });
       }
     });
   }
@@ -332,6 +359,25 @@ function panToLocation(locId, coord) {
   if (marker) marker.openPopup();
 }
 
+function buildVolumeBounds() {
+  const volMap = {};
+  chapters.forEach(ch => {
+    if (!volMap[ch.volume]) {
+      volMap[ch.volume] = { firstIndex: ch.index, lastIndex: ch.index };
+    }
+    volMap[ch.volume].lastIndex = Math.max(volMap[ch.volume].lastIndex, ch.index);
+  });
+  // Sort by first chapter index so volumes are in order
+  volumeBounds = Object.entries(volMap)
+    .map(([vol, bounds]) => ({
+      volume: vol,
+      label: 'Volume ' + vol.replace('vol-', ''),
+      firstIndex: bounds.firstIndex,
+      lastIndex: bounds.lastIndex,
+    }))
+    .sort((a, b) => a.firstIndex - b.firstIndex);
+}
+
 function onSliderChange() {
   const val = parseInt(document.getElementById('chapter-slider').value);
   updateChapterLabel(val);
@@ -340,13 +386,58 @@ function onSliderChange() {
   sliderDebounceTimer = setTimeout(loadData, 150);
 }
 
+// Keyboard jumps: Shift+Arrow=10 chapters, PageUp/PageDown=prev/next volume
+function onSliderKeydown(e) {
+  const slider = document.getElementById('chapter-slider');
+  let val = parseInt(slider.value);
+  const max = parseInt(slider.max);
+  let handled = false;
+
+  if (e.key === 'PageDown') {
+    // Jump to start of next volume
+    const next = volumeBounds.find(vb => vb.firstIndex > val);
+    val = next ? next.firstIndex : max;
+    handled = true;
+  } else if (e.key === 'PageUp') {
+    // Jump to start of current volume, or previous volume if already at start
+    const cur = volumeBounds.slice().reverse().find(vb => vb.firstIndex <= val);
+    if (cur && cur.firstIndex === val) {
+      const prev = volumeBounds.slice().reverse().find(vb => vb.firstIndex < val);
+      val = prev ? prev.firstIndex : 0;
+    } else if (cur) {
+      val = cur.firstIndex;
+    } else {
+      val = 0;
+    }
+    handled = true;
+  } else if (e.shiftKey && (e.key === 'ArrowRight' || e.key === 'ArrowUp')) {
+    val = Math.min(val + 10, max);
+    handled = true;
+  } else if (e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowDown')) {
+    val = Math.max(val - 10, 0);
+    handled = true;
+  }
+
+  if (handled) {
+    e.preventDefault();
+    slider.value = val;
+    onSliderChange();
+  }
+}
+
 function updateChapterLabel(index) {
   const label = document.getElementById('chapter-label');
   const slider = document.getElementById('chapter-slider');
   if (chapters[index]) {
-    const text = `Ch ${index + 1}/${chapters.length}: ${chapters[index].web_title}`;
+    const vol = volumeBounds.find(vb => index >= vb.firstIndex && index <= vb.lastIndex);
+    const volText = vol ? vol.label + ', ' : '';
+    const text = `${volText}Ch ${index + 1}/${chapters.length}: ${chapters[index].web_title}`;
     label.textContent = text;
     slider.setAttribute('aria-valuetext', text);
+
+    // Keep volume dropdown in sync
+    const volSelect = document.getElementById('volume-select');
+    if (vol) volSelect.value = vol.firstIndex;
   }
 }
 

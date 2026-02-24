@@ -150,6 +150,7 @@ func (s *Store) migrate() error {
 	alters := []string{
 		"ALTER TABLE extracted_locations ADD COLUMN visual_description TEXT",
 		"ALTER TABLE locations ADD COLUMN visual_description TEXT",
+		"ALTER TABLE relationships ADD COLUMN quote TEXT",
 	}
 	for _, alt := range alters {
 		s.DB.Exec(alt) // ignore errors (column already exists)
@@ -392,8 +393,8 @@ func (s *Store) WriteAggregated(data *model.AggregatedData) error {
 	}
 
 	for _, rel := range data.Relationships {
-		if _, err := tx.Exec("INSERT INTO relationships (from_loc, to_loc, type, detail, first_chapter_idx) VALUES (?, ?, ?, ?, ?)",
-			rel.From, rel.To, rel.Type, rel.Detail, rel.FirstChapterIndex); err != nil {
+		if _, err := tx.Exec("INSERT INTO relationships (from_loc, to_loc, type, detail, quote, first_chapter_idx) VALUES (?, ?, ?, ?, ?, ?)",
+			rel.From, rel.To, rel.Type, rel.Detail, rel.Quote, rel.FirstChapterIndex); err != nil {
 			return err
 		}
 	}
@@ -443,15 +444,19 @@ func (s *Store) ReadAggregated() (*model.AggregatedData, error) {
 	}
 
 	// Relationships
-	relRows, err := s.DB.Query("SELECT from_loc, to_loc, type, detail, first_chapter_idx FROM relationships ORDER BY first_chapter_idx")
+	relRows, err := s.DB.Query("SELECT from_loc, to_loc, type, detail, quote, first_chapter_idx FROM relationships ORDER BY first_chapter_idx")
 	if err != nil {
 		return nil, err
 	}
 	defer relRows.Close()
 	for relRows.Next() {
 		var rel model.AggregatedRelationship
-		if err := relRows.Scan(&rel.From, &rel.To, &rel.Type, &rel.Detail, &rel.FirstChapterIndex); err != nil {
+		var quote sql.NullString
+		if err := relRows.Scan(&rel.From, &rel.To, &rel.Type, &rel.Detail, &quote, &rel.FirstChapterIndex); err != nil {
 			return nil, err
+		}
+		if quote.Valid {
+			rel.Quote = quote.String
 		}
 		data.Relationships = append(data.Relationships, rel)
 	}

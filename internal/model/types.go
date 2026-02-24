@@ -104,6 +104,7 @@ type AggregatedRelationship struct {
 	To                string           `json:"to"`
 	Type              RelationshipType `json:"type"`
 	Detail            string           `json:"detail"`
+	Quote             string           `json:"quote,omitempty"`
 	FirstChapterIndex int              `json:"first_chapter_index"`
 }
 

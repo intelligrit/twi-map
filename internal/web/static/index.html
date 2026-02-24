@@ -15,7 +15,9 @@
 
   <nav id="controls" aria-label="Map controls">
     <div id="chapter-control">
-      <label for="chapter-slider">Reading progress:</label>
+      <label for="volume-select">Volume:</label>
+      <select id="volume-select" aria-label="Jump to volume"></select>
+      <label for="chapter-slider">Chapter:</label>
       <input type="range" id="chapter-slider" min="0" max="0" value="0"
              aria-valuetext="Loading...">
       <span id="chapter-label" aria-live="polite">Loading...</span>
