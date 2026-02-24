@@ -16,11 +16,16 @@ const TYPE_COLORS = {
 // Which types get permanent text labels on the map
 const LABELED_TYPES = new Set(['continent', 'nation', 'city', 'town', 'body_of_water', 'forest', 'landmark', 'dungeon', 'building']);
 
+// Zoom level at which ALL location labels appear (not just LABELED_TYPES)
+const SHOW_ALL_LABELS_ZOOM = 4;
+
 let twiMap, chapters = [], locations = [], relationships = [], coordinates = [], containment = [];
 let markerLayer, lineLayer, labelLayer, landLayer;
 let activeTypes = new Set(Object.keys(TYPE_COLORS));
 let hiddenLocations = new Set();
 let sliderDebounceTimer = null;
+// Map from location ID to its Leaflet marker, for keyboard-driven popup opening
+let markerById = {};
 
 // Escape HTML to prevent XSS from LLM-generated location data.
 function escapeHtml(str) {
@@ -35,7 +40,9 @@ async function init() {
     center: [0, 0],
     zoom: 1,
     minZoom: -1,
-    maxZoom: 7
+    maxZoom: 7,
+    keyboard: true,
+    zoomControl: true
   });
 
   // Coordinate space bounds
@@ -48,8 +55,11 @@ async function init() {
   markerLayer = L.layerGroup().addTo(twiMap);
   labelLayer = L.layerGroup().addTo(twiMap);
 
-  // Scale labels with zoom
-  twiMap.on('zoomend', updateLabelScale);
+  // Scale labels with zoom and show more labels at higher zoom
+  twiMap.on('zoomend', () => {
+    updateLabelScale();
+    renderMap();
+  });
   updateLabelScale();
 
   // Load chapters for the slider
@@ -81,6 +91,7 @@ async function init() {
     input.type = 'checkbox';
     input.checked = true;
     input.dataset.type = type;
+    input.setAttribute('aria-label', type.replace('_', ' ') + ' locations');
     input.addEventListener('change', () => {
       if (input.checked) {
         activeTypes.add(type);
@@ -135,6 +146,7 @@ function renderMap() {
   markerLayer.clearLayers();
   lineLayer.clearLayers();
   labelLayer.clearLayers();
+  markerById = {};
 
   const coordMap = {};
   coordinates.forEach(c => { coordMap[c.location_id] = c; });
@@ -160,10 +172,14 @@ function renderMap() {
           { color: '#ffffff20', weight: 1, dashArray: '4 4' }
         ).addTo(lineLayer);
 
-        line.bindPopup(`<b>${rel.from}</b> &rarr; <b>${rel.to}</b><br>${rel.detail || rel.type}`);
+        line.bindPopup(`<b>${escapeHtml(rel.from)}</b> &rarr; <b>${escapeHtml(rel.to)}</b><br>${escapeHtml(rel.detail || rel.type)}`);
       }
     });
   }
+
+  // Determine whether to show all labels based on zoom level
+  const currentZoom = twiMap.getZoom();
+  const showAllLabels = currentZoom >= SHOW_ALL_LABELS_ZOOM;
 
   // Add markers with labels
   visibleLocations.forEach(loc => {
@@ -194,7 +210,7 @@ function renderMap() {
       }).addTo(markerLayer);
     }
 
-    marker.bindPopup(`
+    const popupContent = `
       <h3>${escapeHtml(loc.name)}</h3>
       <div class="popup-type">${escapeHtml(loc.type.replace('_', ' '))}</div>
       <div class="popup-desc">${escapeHtml(loc.description) || 'No description'}</div>
@@ -204,10 +220,12 @@ function renderMap() {
         Mentions: ${loc.mention_count}
         ${loc.aliases && loc.aliases.length ? '<br>Aliases: ' + escapeHtml(loc.aliases.join(', ')) : ''}
       </div>
-    `);
+    `;
+    marker.bindPopup(popupContent);
+    markerById[loc.id] = marker;
 
-    // Add text label for important location types or The Wandering Inn
-    if (LABELED_TYPES.has(loc.type) || isWanderingInn) {
+    // Add text label — show for important types always, all types at high zoom
+    if (showAllLabels || LABELED_TYPES.has(loc.type) || isWanderingInn) {
       const fontSize = isWanderingInn ? 14 : labelSize(loc.type);
       const labelColor = isWanderingInn ? '#ffd700' : color;
       const label = L.marker([coord.y, coord.x], {
@@ -253,31 +271,65 @@ function updateSidebar(visibleLocations, coordMap) {
     const coord = coordMap[loc.id];
     const isHidden = hiddenLocations.has(loc.id);
 
+    li.setAttribute('role', 'option');
+    li.setAttribute('tabindex', '0');
+    li.setAttribute('aria-selected', (!isHidden).toString());
+    li.setAttribute('aria-label', loc.name + ', ' + loc.type.replace('_', ' ') +
+      (isHidden ? ', hidden' : '') + ', ' + loc.mention_count + ' mentions');
+
     li.className = isHidden ? 'loc-hidden' : '';
     li.innerHTML = `
-      <span class="loc-eye">${isHidden ? '&#9675;' : '&#9679;'}</span>
-      <span class="loc-dot" style="background:${color}"></span>
-      <span class="loc-name">${loc.name}</span>
-      <span class="loc-type">${loc.type.replace('_', ' ')}</span>
+      <span class="loc-eye" aria-hidden="true">${isHidden ? '&#9675;' : '&#9679;'}</span>
+      <span class="loc-dot" style="background:${color}" aria-hidden="true"></span>
+      <span class="loc-name">${escapeHtml(loc.name)}</span>
+      <span class="loc-type">${escapeHtml(loc.type.replace('_', ' '))}</span>
     `;
 
+    // Click handler: eye area toggles visibility, elsewhere pans and opens popup
     li.addEventListener('click', (e) => {
       if (e.offsetX < 30) {
-        // Click on eye area: toggle visibility
-        if (hiddenLocations.has(loc.id)) {
-          hiddenLocations.delete(loc.id);
-        } else {
-          hiddenLocations.add(loc.id);
-        }
-        renderMap();
+        toggleLocationVisibility(loc.id);
       } else if (coord) {
-        // Click elsewhere: pan to location
-        twiMap.setView([coord.y, coord.x], 4);
+        panToLocation(loc.id, coord);
+      }
+    });
+
+    // Keyboard handler: Enter pans to location, Space toggles visibility
+    li.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (coord) panToLocation(loc.id, coord);
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        toggleLocationVisibility(loc.id);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = li.nextElementSibling;
+        if (next) next.focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prev = li.previousElementSibling;
+        if (prev) prev.focus();
       }
     });
 
     list.appendChild(li);
   });
+}
+
+function toggleLocationVisibility(locId) {
+  if (hiddenLocations.has(locId)) {
+    hiddenLocations.delete(locId);
+  } else {
+    hiddenLocations.add(locId);
+  }
+  renderMap();
+}
+
+function panToLocation(locId, coord) {
+  twiMap.setView([coord.y, coord.x], Math.max(twiMap.getZoom(), 4));
+  const marker = markerById[locId];
+  if (marker) marker.openPopup();
 }
 
 function onSliderChange() {
@@ -290,8 +342,11 @@ function onSliderChange() {
 
 function updateChapterLabel(index) {
   const label = document.getElementById('chapter-label');
+  const slider = document.getElementById('chapter-slider');
   if (chapters[index]) {
-    label.textContent = `Ch ${index + 1}/${chapters.length}: ${chapters[index].web_title}`;
+    const text = `Ch ${index + 1}/${chapters.length}: ${chapters[index].web_title}`;
+    label.textContent = text;
+    slider.setAttribute('aria-valuetext', text);
   }
 }
 
@@ -313,19 +368,20 @@ function markerSize(type, loc) {
 
 function labelSize(type) {
   switch (type) {
-    case 'continent': return 20;
-    case 'nation': return 15;
-    case 'city': return 13;
-    case 'body_of_water': return 12;
-    case 'town': return 11;
+    case 'continent': return 22;
+    case 'nation': return 17;
+    case 'city': return 14;
+    case 'body_of_water': return 13;
+    case 'town': return 12;
     default: return 11;
   }
 }
 
 function updateLabelScale() {
   const zoom = twiMap.getZoom();
-  // Gentle scale: 1x at zoom 1, ~1.5x at zoom 4, ~2x at zoom 7
-  const scale = 1 + Math.max(0, zoom - 1) * 0.2;
+  // Aggressive scale: 1x at zoom 1, ~2.5x at zoom 4, ~4x at zoom 7
+  // Labels stay readable as you zoom into regions
+  const scale = 1 + Math.max(0, zoom - 1) * 0.5;
   document.documentElement.style.setProperty('--label-scale', Math.max(scale, 0.6));
 }
 
