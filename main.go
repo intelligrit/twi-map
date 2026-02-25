@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/robertmeta/twi-map/cmd"
+	"github.com/intelligrit/twi-map/cmd"
 )
 
 func main() {

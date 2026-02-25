@@ -1,4 +1,4 @@
-module github.com/robertmeta/twi-map
+module github.com/intelligrit/twi-map
 
 go 1.25.0
 

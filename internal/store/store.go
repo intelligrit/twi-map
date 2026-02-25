@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 
 	_ "github.com/duckdb/duckdb-go/v2"
-	"github.com/robertmeta/twi-map/internal/model"
+	"github.com/intelligrit/twi-map/internal/model"
 )
 
 // Store manages all data persistence via DuckDB.

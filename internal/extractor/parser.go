@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/robertmeta/twi-map/internal/model"
+	"github.com/intelligrit/twi-map/internal/model"
 )
 
 // extractionResponse mirrors the JSON structure returned by the LLM.

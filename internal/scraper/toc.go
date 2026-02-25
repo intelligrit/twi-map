@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/robertmeta/twi-map/internal/model"
+	"github.com/intelligrit/twi-map/internal/model"
 )
 
 const tocURL = "https://wanderinginn.com/table-of-contents/"

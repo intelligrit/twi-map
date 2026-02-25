@@ -33,13 +33,13 @@ TWI Map uses a multi-stage pipeline to transform 807 chapters (~12 million words
 ## Install
 
 ```bash
-go install github.com/robertmeta/twi-map@latest
+go install github.com/intelligrit/twi-map@latest
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/robertmeta/twi-map.git
+git clone https://github.com/intelligrit/twi-map.git
 cd twi-map
 make build
 ```

@@ -1,8 +1,8 @@
 package aggregator
 
 import (
-	"github.com/robertmeta/twi-map/internal/model"
-	"github.com/robertmeta/twi-map/internal/store"
+	"github.com/intelligrit/twi-map/internal/model"
+	"github.com/intelligrit/twi-map/internal/store"
 )
 
 // AssignCoordinates generates initial coordinates for locations that don't have any.

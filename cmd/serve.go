@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/robertmeta/twi-map/internal/store"
-	"github.com/robertmeta/twi-map/internal/web"
+	"github.com/intelligrit/twi-map/internal/store"
+	"github.com/intelligrit/twi-map/internal/web"
 	"github.com/spf13/cobra"
 )
 

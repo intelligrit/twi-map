@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/robertmeta/twi-map/internal/model"
+	"github.com/intelligrit/twi-map/internal/model"
 )
 
 func testStore(t *testing.T) *Store {

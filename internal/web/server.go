@@ -6,7 +6,7 @@ import (
 	"io/fs"
 	"net/http"
 
-	"github.com/robertmeta/twi-map/internal/store"
+	"github.com/intelligrit/twi-map/internal/store"
 )
 
 //go:embed all:static

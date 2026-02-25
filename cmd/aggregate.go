@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/robertmeta/twi-map/internal/aggregator"
-	"github.com/robertmeta/twi-map/internal/store"
+	"github.com/intelligrit/twi-map/internal/aggregator"
+	"github.com/intelligrit/twi-map/internal/store"
 	"github.com/spf13/cobra"
 )
 

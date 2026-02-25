@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/robertmeta/twi-map/internal/scraper"
-	"github.com/robertmeta/twi-map/internal/store"
+	"github.com/intelligrit/twi-map/internal/scraper"
+	"github.com/intelligrit/twi-map/internal/store"
 	"github.com/spf13/cobra"
 )
 

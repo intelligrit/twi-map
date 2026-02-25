@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/robertmeta/twi-map/internal/model"
-	"github.com/robertmeta/twi-map/internal/store"
+	"github.com/intelligrit/twi-map/internal/model"
+	"github.com/intelligrit/twi-map/internal/store"
 )
 
 func testServer(t *testing.T) *Server {
