@@ -256,13 +256,35 @@ func Aggregate(s *store.Store) (*model.AggregatedData, error) {
 		return false
 	}
 
+	// Build set of "established" location IDs — those that meet the full inclusion criteria
+	// (enough mentions AND traceable). Then find low-mention locations that are relationship
+	// endpoints connected to an established location — these provide provenance context.
+	established := map[string]bool{}
+	for _, entry := range locMap {
+		if entry.loc.MentionCount >= minMentions && isTraceable(entry.loc.ID) {
+			established[entry.loc.ID] = true
+		}
+	}
+	provenanceEndpoints := map[string]bool{}
+	for _, rel := range allRels {
+		fromID := normalizeName(rel.From)
+		toID := normalizeName(rel.To)
+		// If one side is established, the other side earns inclusion as provenance
+		if established[fromID] && isTraceable(toID) {
+			provenanceEndpoints[toID] = true
+		}
+		if established[toID] && isTraceable(fromID) {
+			provenanceEndpoints[fromID] = true
+		}
+	}
+
 	var locations []model.AggregatedLocation
 	for _, entry := range locMap {
-		if entry.loc.MentionCount < minMentions {
-			continue // not referenced enough
-		}
 		if !isTraceable(entry.loc.ID) {
 			continue // can't place on map
+		}
+		if entry.loc.MentionCount < minMentions && !provenanceEndpoints[entry.loc.ID] {
+			continue // not referenced enough and not a provenance endpoint
 		}
 		for idx := range entry.indices {
 			entry.loc.ChapterIndices = append(entry.loc.ChapterIndices, idx)
