@@ -30,6 +30,8 @@ let markerById = {};
 let sectionBounds = [];
 // Current reading format: 'web', 'audiobook', 'ebook'
 let readingFormat = 'web';
+// Minimum mention count filter (detail slider)
+let minMentionFilter = 1;
 
 const STORAGE_KEY = 'twi-map-state';
 
@@ -42,6 +44,7 @@ function saveState() {
       showProvenance: document.getElementById('show-provenance').checked,
       activeTypes: [...activeTypes],
       hiddenLocations: [...hiddenLocations],
+      minMentionFilter: minMentionFilter,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) { /* storage unavailable */ }
@@ -212,6 +215,23 @@ async function init() {
     activeTypes = new Set(saved.activeTypes);
   }
 
+  // Restore and wire up detail (minimum mentions) slider
+  const detailSlider = document.getElementById('detail-slider');
+  const detailLabel = document.getElementById('detail-label');
+  if (saved && saved.minMentionFilter) {
+    minMentionFilter = saved.minMentionFilter;
+    detailSlider.value = minMentionFilter;
+  }
+  detailLabel.textContent = detailLabelText(minMentionFilter);
+  detailSlider.setAttribute('aria-valuetext', minMentionFilter + ' or more mentions');
+  detailSlider.addEventListener('input', () => {
+    minMentionFilter = parseInt(detailSlider.value);
+    detailLabel.textContent = detailLabelText(minMentionFilter);
+    detailSlider.setAttribute('aria-valuetext', minMentionFilter + ' or more mentions');
+    saveState();
+    renderMap();
+  });
+
   // Set up type filter dropdown
   const filterBtn = document.getElementById('type-filter-btn');
   const filterDropdown = document.getElementById('type-filter-dropdown');
@@ -320,7 +340,8 @@ function renderMap() {
   coordinates.forEach(c => { coordMap[c.location_id] = c; });
 
   const visibleLocations = locations.filter(loc =>
-    activeTypes.has(loc.type) && coordMap[loc.id] && !hiddenLocations.has(loc.id)
+    activeTypes.has(loc.type) && coordMap[loc.id] && !hiddenLocations.has(loc.id) &&
+    loc.mention_count >= minMentionFilter
   );
 
   // Draw landmasses using ALL locations with coordinates (ignoring hide/type filters)
@@ -520,7 +541,7 @@ function updateSidebar(visibleLocations, coordMap) {
   // Show all locations (including hidden ones dimmed) so user can toggle them back
   const searchTerm = (document.getElementById('location-search').value || '').toLowerCase().trim();
   const allWithCoords = locations.filter(loc => {
-    if (!activeTypes.has(loc.type) || !coordMap[loc.id]) return false;
+    if (!activeTypes.has(loc.type) || !coordMap[loc.id] || loc.mention_count < minMentionFilter) return false;
     if (searchTerm) {
       const haystack = (loc.name + ' ' + (loc.aliases || []).join(' ') + ' ' + loc.type).toLowerCase();
       return haystack.includes(searchTerm);
@@ -1035,6 +1056,10 @@ function luminance(hex) {
   const g = ((rgb >> 8) & 0xff) / 255;
   const b = (rgb & 0xff) / 255;
   return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+
+function detailLabelText(n) {
+  return n >= 99 ? '99+ mentions' : n + '+ mentions';
 }
 
 // Point-to-segment distance in pixel space (for proximity click)

@@ -38,6 +38,12 @@
         <div id="type-filter-dropdown" role="group" aria-label="Location type filters" hidden></div>
       </div>
     </div>
+    <div id="detail-control">
+      <label for="detail-slider">Detail:</label>
+      <input type="range" id="detail-slider" min="1" max="99" value="1"
+             aria-label="Minimum mentions to show">
+      <span id="detail-label">1+ mentions</span>
+    </div>
     <div id="toggle-control">
       <label><input type="checkbox" id="show-relationships" checked> Show relationships</label>
       <label><input type="checkbox" id="show-provenance"> Show provenance</label>
