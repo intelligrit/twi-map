@@ -90,6 +90,39 @@ async function init() {
   });
   updateLabelScale();
 
+  // Proximity click: when user clicks empty space, open the nearest marker/line popup
+  twiMap.on('click', (e) => {
+    const clickPt = twiMap.latLngToContainerPoint(e.latlng);
+    let bestDist = Infinity;
+    let bestLayer = null;
+    const threshold = 40; // pixels
+
+    // Check markers
+    markerLayer.eachLayer(layer => {
+      const pt = twiMap.latLngToContainerPoint(layer.getLatLng());
+      const d = clickPt.distanceTo(pt);
+      if (d < bestDist) { bestDist = d; bestLayer = layer; }
+    });
+
+    // Check line midpoints (relationships + provenance)
+    lineLayer.eachLayer(layer => {
+      if (!layer.getLatLngs || !layer.getPopup) return;
+      const latlngs = layer.getLatLngs();
+      if (!latlngs || latlngs.length < 2) return;
+      // Check distance to each segment point and midpoint
+      for (let i = 0; i < latlngs.length - 1; i++) {
+        const a = twiMap.latLngToContainerPoint(latlngs[i]);
+        const b = twiMap.latLngToContainerPoint(latlngs[i + 1]);
+        const d = distToSegment(clickPt, a, b);
+        if (d < bestDist) { bestDist = d; bestLayer = layer; }
+      }
+    });
+
+    if (bestLayer && bestDist <= threshold && bestLayer.getPopup) {
+      bestLayer.openPopup(e.latlng);
+    }
+  });
+
   // Load chapters for the slider
   try {
     const chapResp = await fetch('/api/chapters');
@@ -121,9 +154,17 @@ async function init() {
     slider.addEventListener('input', onSliderChange);
     slider.addEventListener('keydown', onSliderKeydown);
     updateChapterLabel(parseInt(slider.value));
+    populateChapterSelect(parseInt(slider.value));
 
     jumpSelect.addEventListener('change', () => {
       slider.value = jumpSelect.value;
+      populateChapterSelect(parseInt(slider.value));
+      onSliderChange();
+    });
+
+    const chapterSelect = document.getElementById('chapter-select');
+    chapterSelect.addEventListener('change', () => {
+      slider.value = chapterSelect.value;
       onSliderChange();
     });
 
@@ -134,6 +175,7 @@ async function init() {
       const newMax = getMaxChapter();
       slider.max = newMax;
       if (parseInt(slider.value) > newMax) slider.value = newMax;
+      populateChapterSelect(parseInt(slider.value));
       updateChapterLabel(parseInt(slider.value));
       saveState();
       loadData();
@@ -330,9 +372,11 @@ function renderMap() {
       const ghostCoord = fromVisible ? toCoord : fromCoord;
       const ghostName = locNameMap[ghostId] || ghostId;
 
-      const line = L.polyline(
-        [[fromCoord.y, fromCoord.x], [toCoord.y, toCoord.x]],
-        { color: '#ffffff18', weight: 1, dashArray: '2 6' }
+      const latlngs = [[fromCoord.y, fromCoord.x], [toCoord.y, toCoord.x]];
+
+      // Visible ghost line
+      const line = L.polyline(latlngs,
+        { color: '#ffffff30', weight: 2, dashArray: '2 6' }
       ).addTo(lineLayer);
 
       const chTitle = chapters[rel.first_chapter_index]
@@ -344,6 +388,14 @@ function renderMap() {
       }
       popup += `<div class="popup-meta">First mentioned: Ch ${rel.first_chapter_index + 1}${chTitle ? ' — ' + escapeHtml(chTitle) : ''}</div>`;
       line.bindPopup(popup, { maxWidth: 350 });
+
+      // Wide invisible hit-area line for easy clicking
+      const hitLine = L.polyline(latlngs,
+        { weight: 12, opacity: 0, interactive: true }
+      ).addTo(lineLayer);
+      hitLine.bindPopup(popup, { maxWidth: 350 });
+      hitLine.on('mouseover', () => { line.setStyle({ color: '#ffffff60' }); });
+      hitLine.on('mouseout', () => { line.setStyle({ color: '#ffffff30' }); });
 
       // Ghost endpoint marker and label
       L.circleMarker([ghostCoord.y, ghostCoord.x], {
@@ -602,9 +654,41 @@ function populateJumpSelect() {
   });
 }
 
+function populateChapterSelect(currentIndex) {
+  const sel = document.getElementById('chapter-select');
+  // Find which section contains the current index
+  const sec = sectionBounds.find(sb => currentIndex >= sb.firstIndex && currentIndex <= sb.lastIndex);
+  if (!sec) { sel.innerHTML = ''; return; }
+
+  sel.innerHTML = '';
+  for (let i = sec.firstIndex; i <= sec.lastIndex; i++) {
+    const ch = chapters[i];
+    if (!ch) continue;
+    // Skip chapters that don't belong to this format
+    if (readingFormat === 'audiobook' && !ch.audiobook_chapter) continue;
+    if (readingFormat === 'ebook' && !ch.ebook_chapter) continue;
+
+    let display;
+    if (readingFormat === 'audiobook' && ch.audiobook_chapter) {
+      display = ch.audiobook_chapter.replace(/^Book\s+\d+,\s*/, '');
+    } else if (readingFormat === 'ebook' && ch.ebook_chapter) {
+      display = ch.ebook_chapter.replace(/^Book\s+\d+,\s*/, '');
+    } else {
+      display = ch.web_title;
+    }
+
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = display;
+    sel.appendChild(opt);
+  }
+  sel.value = currentIndex;
+}
+
 function onSliderChange() {
   const val = parseInt(document.getElementById('chapter-slider').value);
   updateChapterLabel(val);
+  populateChapterSelect(val);
   saveState();
   // Debounce data loading to avoid flooding the server when dragging the slider.
   clearTimeout(sliderDebounceTimer);
@@ -935,6 +1019,16 @@ function luminance(hex) {
   const g = ((rgb >> 8) & 0xff) / 255;
   const b = (rgb & 0xff) / 255;
   return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+
+// Point-to-segment distance in pixel space (for proximity click)
+function distToSegment(p, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
 }
 
 init();

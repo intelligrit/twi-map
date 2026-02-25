@@ -73,13 +73,18 @@ body {
 }
 
 #format-select,
-#jump-select {
+#jump-select,
+#chapter-select {
   background: #1a1a2e;
   color: #e0e0e0;
   border: 1px solid #0f3460;
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 14px;
+}
+
+#chapter-select {
+  max-width: 280px;
 }
 
 #chapter-slider {
