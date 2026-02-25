@@ -7,7 +7,7 @@
   <meta name="description" content="Interactive, spoiler-free map of The Wandering Inn web serial. Explore Innworld as you read.">
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="stylesheet" href="lib/leaflet.css">
-  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="app.css?v=2">
 </head>
 <body>
   <a href="#map" class="skip-link">Skip to map</a>
@@ -20,19 +20,27 @@
 
   <nav id="controls" aria-label="Map controls">
     <div id="chapter-control">
-      <label for="volume-select">Volume:</label>
-      <select id="volume-select" aria-label="Jump to volume"></select>
+      <select id="format-select" aria-label="Reading format">
+        <option value="web">Web Serial</option>
+        <option value="audiobook">Audiobook</option>
+        <option value="ebook">Ebook</option>
+      </select>
+      <select id="jump-select" aria-label="Jump to section"></select>
       <label for="chapter-slider">Chapter:</label>
       <input type="range" id="chapter-slider" min="0" max="0" value="0"
              aria-valuetext="Loading...">
       <span id="chapter-label" aria-live="polite">Loading...</span>
     </div>
-    <fieldset id="filter-control">
-      <legend>Types:</legend>
-      <div id="type-filters" role="group" aria-label="Location type filters"></div>
-    </fieldset>
+    <div id="filter-control">
+      <label for="type-filter-select">Types:</label>
+      <div id="type-filter-wrapper">
+        <button id="type-filter-btn" aria-haspopup="true" aria-expanded="false">All types</button>
+        <div id="type-filter-dropdown" role="group" aria-label="Location type filters" hidden></div>
+      </div>
+    </div>
     <div id="toggle-control">
       <label><input type="checkbox" id="show-relationships" checked> Show relationships</label>
+      <label><input type="checkbox" id="show-provenance"> Show provenance</label>
     </div>
   </nav>
 
@@ -40,12 +48,17 @@
     <div id="map" role="img" aria-label="Interactive map of Innworld locations. Use the sidebar location list for keyboard navigation."></div>
     <aside id="sidebar" aria-label="Location list">
       <h2>Locations</h2>
+      <input type="search" id="location-search" placeholder="Search locations..." aria-label="Search locations">
+      <div id="sidebar-actions">
+        <button id="hide-all-btn" title="Hide all locations">Hide all</button>
+        <button id="show-all-btn" title="Show all locations">Show all</button>
+      </div>
       <div id="location-count" aria-live="polite"></div>
       <ul id="location-list" role="listbox" aria-label="Map locations"></ul>
     </aside>
   </div>
 
   <script src="lib/leaflet.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>

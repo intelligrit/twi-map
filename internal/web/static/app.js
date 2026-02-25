@@ -26,8 +26,10 @@ let hiddenLocations = new Set();
 let sliderDebounceTimer = null;
 // Map from location ID to its Leaflet marker, for keyboard-driven popup opening
 let markerById = {};
-// Volume boundaries: [{volume, firstIndex, lastIndex}], built from chapter data
-let volumeBounds = [];
+// Section boundaries for jump navigation, rebuilt when format changes
+let sectionBounds = [];
+// Current reading format: 'web', 'audiobook', 'ebook'
+let readingFormat = 'web';
 
 const STORAGE_KEY = 'twi-map-state';
 
@@ -35,7 +37,9 @@ function saveState() {
   try {
     const state = {
       chapter: parseInt(document.getElementById('chapter-slider').value) || 0,
+      readingFormat: readingFormat,
       showRelationships: document.getElementById('show-relationships').checked,
+      showProvenance: document.getElementById('show-provenance').checked,
       activeTypes: [...activeTypes],
       hiddenLocations: [...hiddenLocations],
     };
@@ -99,27 +103,40 @@ async function init() {
   const saved = loadState();
 
   if (chapters.length > 0) {
-    // Build volume boundaries for jump navigation
-    buildVolumeBounds();
-
     const slider = document.getElementById('chapter-slider');
-    slider.max = chapters.length - 1;
-    slider.value = saved ? Math.min(saved.chapter, chapters.length - 1) : 0;
+    const formatSelect = document.getElementById('format-select');
+    const jumpSelect = document.getElementById('jump-select');
+
+    // Restore reading format
+    if (saved && saved.readingFormat) {
+      readingFormat = saved.readingFormat;
+      formatSelect.value = readingFormat;
+    }
+
+    buildSectionBounds();
+    populateJumpSelect();
+
+    slider.max = getMaxChapter();
+    slider.value = saved ? Math.min(saved.chapter, parseInt(slider.max)) : 0;
     slider.addEventListener('input', onSliderChange);
     slider.addEventListener('keydown', onSliderKeydown);
     updateChapterLabel(parseInt(slider.value));
 
-    // Populate volume dropdown
-    const volSelect = document.getElementById('volume-select');
-    volumeBounds.forEach(vb => {
-      const opt = document.createElement('option');
-      opt.value = vb.firstIndex;
-      opt.textContent = vb.label;
-      volSelect.appendChild(opt);
-    });
-    volSelect.addEventListener('change', () => {
-      slider.value = volSelect.value;
+    jumpSelect.addEventListener('change', () => {
+      slider.value = jumpSelect.value;
       onSliderChange();
+    });
+
+    formatSelect.addEventListener('change', () => {
+      readingFormat = formatSelect.value;
+      buildSectionBounds();
+      populateJumpSelect();
+      const newMax = getMaxChapter();
+      slider.max = newMax;
+      if (parseInt(slider.value) > newMax) slider.value = newMax;
+      updateChapterLabel(parseInt(slider.value));
+      saveState();
+      loadData();
     });
   }
 
@@ -127,6 +144,12 @@ async function init() {
   const relCheckbox = document.getElementById('show-relationships');
   if (saved && typeof saved.showRelationships === 'boolean') {
     relCheckbox.checked = saved.showRelationships;
+  }
+
+  // Restore provenance toggle
+  const provCheckbox = document.getElementById('show-provenance');
+  if (saved && typeof saved.showProvenance === 'boolean') {
+    provCheckbox.checked = saved.showProvenance;
   }
 
   // Restore hidden locations
@@ -139,14 +162,12 @@ async function init() {
     activeTypes = new Set(saved.activeTypes);
   }
 
-  // Set up type filters
-  const filterDiv = document.getElementById('type-filters');
+  // Set up type filter dropdown
+  const filterBtn = document.getElementById('type-filter-btn');
+  const filterDropdown = document.getElementById('type-filter-dropdown');
   for (const [type, color] of Object.entries(TYPE_COLORS)) {
     const isActive = activeTypes.has(type);
     const label = document.createElement('label');
-    label.className = isActive ? 'active' : '';
-    label.style.background = color;
-    label.style.color = luminance(color) > 0.5 ? '#000' : '#fff';
 
     const input = document.createElement('input');
     input.type = 'checkbox';
@@ -156,21 +177,56 @@ async function init() {
     input.addEventListener('change', () => {
       if (input.checked) {
         activeTypes.add(type);
-        label.classList.add('active');
       } else {
         activeTypes.delete(type);
-        label.classList.remove('active');
       }
+      updateFilterBtnLabel();
       saveState();
       renderMap();
     });
 
+    const swatch = document.createElement('span');
+    swatch.className = 'type-swatch';
+    swatch.style.background = color;
+
     label.appendChild(input);
+    label.appendChild(swatch);
     label.appendChild(document.createTextNode(type.replace('_', ' ')));
-    filterDiv.appendChild(label);
+    filterDropdown.appendChild(label);
   }
+  updateFilterBtnLabel();
+
+  filterBtn.addEventListener('click', () => {
+    const open = !filterDropdown.hidden;
+    filterDropdown.hidden = open;
+    filterBtn.setAttribute('aria-expanded', (!open).toString());
+  });
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#type-filter-wrapper')) {
+      filterDropdown.hidden = true;
+      filterBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
 
   relCheckbox.addEventListener('change', () => { saveState(); renderMap(); });
+  provCheckbox.addEventListener('change', () => { saveState(); renderMap(); });
+
+  // Set up location search
+  document.getElementById('location-search').addEventListener('input', () => renderMap());
+
+  // Hide all / Show all buttons
+  document.getElementById('hide-all-btn').addEventListener('click', () => {
+    locations.forEach(loc => hiddenLocations.add(loc.id));
+    saveState();
+    renderMap();
+  });
+  document.getElementById('show-all-btn').addEventListener('click', () => {
+    hiddenLocations.clear();
+    saveState();
+    renderMap();
+  });
 
   await loadData();
 }
@@ -217,14 +273,18 @@ function renderMap() {
     activeTypes.has(loc.type) && coordMap[loc.id] && !hiddenLocations.has(loc.id)
   );
 
-  // Draw landmasses only for discovered continents
-  drawLandmasses(coordMap, visibleLocations);
+  // Draw landmasses using ALL locations with coordinates (ignoring hide/type filters)
+  // so continent outlines stay visible as a reference even when filtering
+  const allPlacedLocations = locations.filter(loc => coordMap[loc.id]);
+  drawLandmasses(coordMap, allPlacedLocations);
 
-  // Draw relationship lines first (behind markers)
+  // Draw relationship lines only between visible locations
+  const visibleIds = new Set(visibleLocations.map(loc => loc.id));
   if (document.getElementById('show-relationships').checked) {
     relationships.forEach(rel => {
       const fromId = rel.from.toLowerCase().trim();
       const toId = rel.to.toLowerCase().trim();
+      if (!visibleIds.has(fromId) || !visibleIds.has(toId)) return;
       const fromCoord = coordMap[fromId];
       const toCoord = coordMap[toId];
 
@@ -244,6 +304,66 @@ function renderMap() {
         popup += `<div class="popup-meta">First mentioned: Ch ${rel.first_chapter_index + 1}${chTitle ? ' — ' + escapeHtml(chTitle) : ''}</div>`;
         line.bindPopup(popup, { maxWidth: 350 });
       }
+    });
+  }
+
+  // Draw ghost provenance lines from visible locations to hidden ones
+  if (document.getElementById('show-provenance').checked) {
+    // Build a name lookup for ghost endpoint labels
+    const locNameMap = {};
+    locations.forEach(loc => { locNameMap[loc.id] = loc.name; });
+
+    relationships.forEach(rel => {
+      const fromId = rel.from.toLowerCase().trim();
+      const toId = rel.to.toLowerCase().trim();
+      const fromVisible = visibleIds.has(fromId);
+      const toVisible = visibleIds.has(toId);
+
+      // Only draw when exactly one endpoint is visible
+      if (fromVisible === toVisible) return;
+
+      const fromCoord = coordMap[fromId];
+      const toCoord = coordMap[toId];
+      if (!fromCoord || !toCoord) return;
+
+      const ghostId = fromVisible ? toId : fromId;
+      const ghostCoord = fromVisible ? toCoord : fromCoord;
+      const ghostName = locNameMap[ghostId] || ghostId;
+
+      const line = L.polyline(
+        [[fromCoord.y, fromCoord.x], [toCoord.y, toCoord.x]],
+        { color: '#ffffff18', weight: 1, dashArray: '2 6' }
+      ).addTo(lineLayer);
+
+      const chTitle = chapters[rel.first_chapter_index]
+        ? chapters[rel.first_chapter_index].web_title : '';
+      let popup = `<b>${escapeHtml(rel.from)}</b> &rarr; <b>${escapeHtml(rel.to)}</b>`;
+      popup += `<div class="popup-type">${escapeHtml(rel.type)}: ${escapeHtml(rel.detail)}</div>`;
+      if (rel.quote) {
+        popup += `<div class="popup-visual">&ldquo;${escapeHtml(rel.quote)}&rdquo;</div>`;
+      }
+      popup += `<div class="popup-meta">First mentioned: Ch ${rel.first_chapter_index + 1}${chTitle ? ' — ' + escapeHtml(chTitle) : ''}</div>`;
+      line.bindPopup(popup, { maxWidth: 350 });
+
+      // Ghost endpoint marker and label
+      L.circleMarker([ghostCoord.y, ghostCoord.x], {
+        radius: 3,
+        fillColor: '#ffffff',
+        fillOpacity: 0.15,
+        color: '#ffffff',
+        weight: 0.5,
+        opacity: 0.2,
+      }).addTo(lineLayer);
+
+      L.marker([ghostCoord.y, ghostCoord.x], {
+        icon: L.divIcon({
+          className: 'ghost-label',
+          html: `<span style="color:#b0b0c0">${escapeHtml(ghostName)}</span>`,
+          iconSize: [0, 0],
+          iconAnchor: [0, -6],
+        }),
+        interactive: false,
+      }).addTo(lineLayer);
     });
   }
 
@@ -329,7 +449,15 @@ function updateSidebar(visibleLocations, coordMap) {
   });
 
   // Show all locations (including hidden ones dimmed) so user can toggle them back
-  const allWithCoords = locations.filter(loc => activeTypes.has(loc.type) && coordMap[loc.id]);
+  const searchTerm = (document.getElementById('location-search').value || '').toLowerCase().trim();
+  const allWithCoords = locations.filter(loc => {
+    if (!activeTypes.has(loc.type) || !coordMap[loc.id]) return false;
+    if (searchTerm) {
+      const haystack = (loc.name + ' ' + (loc.aliases || []).join(' ') + ' ' + loc.type).toLowerCase();
+      return haystack.includes(searchTerm);
+    }
+    return true;
+  });
   allWithCoords.sort((a, b) => {
     if (a.type !== b.type) return a.type.localeCompare(b.type);
     return a.name.localeCompare(b.name);
@@ -348,20 +476,28 @@ function updateSidebar(visibleLocations, coordMap) {
       (isHidden ? ', hidden' : '') + ', ' + loc.mention_count + ' mentions');
 
     li.className = isHidden ? 'loc-hidden' : '';
+
+    const locateBtn = document.createElement('button');
+    locateBtn.className = 'loc-locate';
+    locateBtn.innerHTML = '&#8982;';
+    locateBtn.title = 'Jump to ' + loc.name;
+    locateBtn.setAttribute('aria-label', 'Jump to ' + loc.name + ' on map');
+    locateBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (coord) panToLocation(loc.id, coord);
+    });
+
     li.innerHTML = `
       <span class="loc-eye" aria-hidden="true">${isHidden ? '&#9675;' : '&#9679;'}</span>
       <span class="loc-dot" style="background:${color}" aria-hidden="true"></span>
       <span class="loc-name">${escapeHtml(loc.name)}</span>
       <span class="loc-type">${escapeHtml(loc.type.replace('_', ' '))}</span>
     `;
+    li.appendChild(locateBtn);
 
-    // Click handler: eye area toggles visibility, elsewhere pans and opens popup
-    li.addEventListener('click', (e) => {
-      if (e.offsetX < 30) {
-        toggleLocationVisibility(loc.id);
-      } else if (coord) {
-        panToLocation(loc.id, coord);
-      }
+    // Click on row toggles visibility
+    li.addEventListener('click', () => {
+      toggleLocationVisibility(loc.id);
     });
 
     // Keyboard handler: Enter pans to location, Space toggles visibility
@@ -387,6 +523,19 @@ function updateSidebar(visibleLocations, coordMap) {
   });
 }
 
+function updateFilterBtnLabel() {
+  const total = Object.keys(TYPE_COLORS).length;
+  const active = activeTypes.size;
+  const btn = document.getElementById('type-filter-btn');
+  if (active === total) {
+    btn.textContent = 'All types';
+  } else if (active === 0) {
+    btn.textContent = 'No types';
+  } else {
+    btn.textContent = active + ' of ' + total + ' types';
+  }
+}
+
 function toggleLocationVisibility(locId) {
   if (hiddenLocations.has(locId)) {
     hiddenLocations.delete(locId);
@@ -403,23 +552,54 @@ function panToLocation(locId, coord) {
   if (marker) marker.openPopup();
 }
 
-function buildVolumeBounds() {
-  const volMap = {};
+function buildSectionBounds() {
+  const map = {};
+  const maxIdx = getMaxChapter();
   chapters.forEach(ch => {
-    if (!volMap[ch.volume]) {
-      volMap[ch.volume] = { firstIndex: ch.index, lastIndex: ch.index };
+    if (ch.index > maxIdx) return;
+    let key, label;
+    if (readingFormat === 'audiobook') {
+      if (!ch.book_number || !ch.audiobook_chapter) return;
+      key = 'book-' + ch.book_number;
+      label = 'Book ' + ch.book_number;
+    } else if (readingFormat === 'ebook') {
+      if (!ch.book_number || !ch.ebook_chapter) return;
+      key = 'book-' + ch.book_number;
+      label = 'Book ' + ch.book_number;
+    } else {
+      key = ch.volume;
+      label = 'Volume ' + ch.volume.replace('vol-', '');
     }
-    volMap[ch.volume].lastIndex = Math.max(volMap[ch.volume].lastIndex, ch.index);
+    if (!map[key]) {
+      map[key] = { key, label, firstIndex: ch.index, lastIndex: ch.index };
+    }
+    map[key].lastIndex = Math.max(map[key].lastIndex, ch.index);
   });
-  // Sort by first chapter index so volumes are in order
-  volumeBounds = Object.entries(volMap)
-    .map(([vol, bounds]) => ({
-      volume: vol,
-      label: 'Volume ' + vol.replace('vol-', ''),
-      firstIndex: bounds.firstIndex,
-      lastIndex: bounds.lastIndex,
-    }))
-    .sort((a, b) => a.firstIndex - b.firstIndex);
+  sectionBounds = Object.values(map).sort((a, b) => a.firstIndex - b.firstIndex);
+}
+
+function getMaxChapter() {
+  if (readingFormat === 'audiobook' || readingFormat === 'ebook') {
+    // Find last chapter that has data for this format
+    for (let i = chapters.length - 1; i >= 0; i--) {
+      const ch = chapters[i];
+      if (readingFormat === 'audiobook' && ch.audiobook_chapter) return ch.index;
+      if (readingFormat === 'ebook' && ch.ebook_chapter) return ch.index;
+    }
+    return 0;
+  }
+  return chapters.length - 1;
+}
+
+function populateJumpSelect() {
+  const jumpSelect = document.getElementById('jump-select');
+  jumpSelect.innerHTML = '';
+  sectionBounds.forEach(sb => {
+    const opt = document.createElement('option');
+    opt.value = sb.firstIndex;
+    opt.textContent = sb.label;
+    jumpSelect.appendChild(opt);
+  });
 }
 
 function onSliderChange() {
@@ -440,14 +620,14 @@ function onSliderKeydown(e) {
 
   if (e.key === 'PageDown') {
     // Jump to start of next volume
-    const next = volumeBounds.find(vb => vb.firstIndex > val);
+    const next = sectionBounds.find(vb => vb.firstIndex > val);
     val = next ? next.firstIndex : max;
     handled = true;
   } else if (e.key === 'PageUp') {
     // Jump to start of current volume, or previous volume if already at start
-    const cur = volumeBounds.slice().reverse().find(vb => vb.firstIndex <= val);
+    const cur = sectionBounds.slice().reverse().find(vb => vb.firstIndex <= val);
     if (cur && cur.firstIndex === val) {
-      const prev = volumeBounds.slice().reverse().find(vb => vb.firstIndex < val);
+      const prev = sectionBounds.slice().reverse().find(vb => vb.firstIndex < val);
       val = prev ? prev.firstIndex : 0;
     } else if (cur) {
       val = cur.firstIndex;
@@ -473,16 +653,25 @@ function onSliderKeydown(e) {
 function updateChapterLabel(index) {
   const label = document.getElementById('chapter-label');
   const slider = document.getElementById('chapter-slider');
-  if (chapters[index]) {
-    const vol = volumeBounds.find(vb => index >= vb.firstIndex && index <= vb.lastIndex);
-    const volText = vol ? vol.label + ', ' : '';
-    const text = `${volText}Ch ${index + 1}/${chapters.length}: ${chapters[index].web_title}`;
+  const ch = chapters[index];
+  if (ch) {
+    const sec = sectionBounds.find(sb => index >= sb.firstIndex && index <= sb.lastIndex);
+    let chName;
+    if (readingFormat === 'audiobook' && ch.audiobook_chapter) {
+      chName = ch.audiobook_chapter;
+    } else if (readingFormat === 'ebook' && ch.ebook_chapter) {
+      chName = ch.ebook_chapter;
+    } else {
+      chName = ch.web_title;
+    }
+    const secText = sec ? sec.label + ', ' : '';
+    const text = `${secText}${chName}`;
     label.textContent = text;
     slider.setAttribute('aria-valuetext', text);
 
-    // Keep volume dropdown in sync
-    const volSelect = document.getElementById('volume-select');
-    if (vol) volSelect.value = vol.firstIndex;
+    // Keep jump dropdown in sync
+    const jumpSelect = document.getElementById('jump-select');
+    if (sec) jumpSelect.value = sec.firstIndex;
   }
 }
 

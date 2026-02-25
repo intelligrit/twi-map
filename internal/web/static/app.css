@@ -72,7 +72,8 @@ body {
   min-width: 300px;
 }
 
-#volume-select {
+#format-select,
+#jump-select {
   background: #1a1a2e;
   color: #e0e0e0;
   border: 1px solid #0f3460;
@@ -96,32 +97,62 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
-  border: none;
-  padding: 0;
 }
 
-#filter-control legend {
-  float: left;
+#filter-control label {
   font-size: 14px;
-  padding-right: 6px;
 }
 
-#type-filters label {
+#type-filter-wrapper {
+  position: relative;
+}
+
+#type-filter-btn {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  border: 1px solid #0f3460;
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+#type-filter-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-radius: 4px;
+  padding: 6px 0;
+  z-index: 1000;
+  min-width: 180px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+#type-filter-dropdown label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
   font-size: 13px;
-  padding: 3px 10px;
-  border-radius: 3px;
   cursor: pointer;
   user-select: none;
 }
 
-#type-filters input { display: none; }
-#type-filters label.active { opacity: 1; }
-#type-filters label:not(.active) { opacity: 0.4; }
+#type-filter-dropdown label:hover {
+  background: #1a1a3e;
+}
 
-#type-filters label:focus-within {
-  outline: 2px solid #e94560;
-  outline-offset: 2px;
+#type-filter-dropdown .type-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+#type-filter-dropdown input[type="checkbox"] {
+  accent-color: #e94560;
 }
 
 #toggle-control label {
@@ -152,6 +183,42 @@ body {
   font-size: 18px;
   margin-bottom: 4px;
   color: #e94560;
+}
+
+#location-search {
+  width: 100%;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  border: 1px solid #0f3460;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+#location-search::placeholder {
+  color: #808090;
+}
+
+#sidebar-actions {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+#sidebar-actions button {
+  flex: 1;
+  padding: 4px 8px;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  border: 1px solid #0f3460;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#sidebar-actions button:hover {
+  background: #1a1a3e;
 }
 
 #location-count {
@@ -198,6 +265,23 @@ body {
   color: #b0b0c0;
   cursor: pointer;
   text-align: center;
+}
+
+.loc-locate {
+  background: none;
+  border: 1px solid #0f3460;
+  border-radius: 3px;
+  color: #b0b0c0;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 5px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.loc-locate:hover {
+  background: #0f3460;
+  color: #e0e0e0;
 }
 
 .loc-name { flex: 1; }
@@ -304,6 +388,30 @@ body {
 .leaflet-popup-content .popup-meta {
   font-size: 12px;
   color: #b0b0c0;
+}
+
+/* Ghost provenance labels */
+.ghost-label {
+  background: none !important;
+  border: none !important;
+  white-space: nowrap;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-weight: 600;
+  pointer-events: none;
+  letter-spacing: 0.5px;
+  transform: scale(var(--label-scale));
+  transform-origin: center bottom;
+}
+
+.ghost-label span {
+  opacity: 0.4;
+  font-size: 10px;
+  text-shadow:
+    -1px -1px 0 #000,
+     1px -1px 0 #000,
+    -1px  1px 0 #000,
+     1px  1px 0 #000,
+     0 0 6px #000;
 }
 
 /* Global focus style for accessibility */
