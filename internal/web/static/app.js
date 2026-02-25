@@ -123,6 +123,14 @@ async function init() {
     }
   });
 
+  // Announce popup content to screen readers via aria-live region
+  const popupLive = document.getElementById('popup-live');
+  twiMap.on('popupopen', (e) => {
+    const el = e.popup.getElement();
+    if (el) popupLive.textContent = el.textContent.trim();
+  });
+  twiMap.on('popupclose', () => { popupLive.textContent = ''; });
+
   // Load chapters for the slider
   try {
     const chapResp = await fetch('/api/chapters');
@@ -453,7 +461,7 @@ function renderMap() {
     }
 
     const popupContent = `
-      <h3>${escapeHtml(loc.name)}</h3>
+      <h2>${escapeHtml(loc.name)}</h2>
       <div class="popup-type">${escapeHtml(loc.type.replace('_', ' '))}</div>
       <div class="popup-desc">${escapeHtml(loc.description) || 'No description'}</div>
       ${loc.visual_description ? `<div class="popup-visual">${escapeHtml(loc.visual_description)}</div>` : ''}
@@ -465,6 +473,15 @@ function renderMap() {
     `;
     marker.bindPopup(popupContent);
     markerById[loc.id] = marker;
+
+    // Make marker tabbable for keyboard/screen reader exploration
+    const markerEl = marker.getElement ? marker.getElement() : (marker._path || null);
+    if (markerEl) {
+      markerEl.setAttribute('tabindex', '0');
+      markerEl.setAttribute('role', 'button');
+      markerEl.setAttribute('aria-label', loc.name + ', ' + loc.type.replace('_', ' '));
+      markerEl.addEventListener('focus', () => { marker.openPopup(); });
+    }
 
     // Add text label — show for important types always, all types at high zoom
     if (showAllLabels || LABELED_TYPES.has(loc.type) || isWanderingInn) {
@@ -521,11 +538,10 @@ function updateSidebar(visibleLocations, coordMap) {
     const coord = coordMap[loc.id];
     const isHidden = hiddenLocations.has(loc.id);
 
-    li.setAttribute('role', 'option');
+    li.setAttribute('role', 'listitem');
     li.setAttribute('tabindex', '0');
-    li.setAttribute('aria-selected', (!isHidden).toString());
     li.setAttribute('aria-label', loc.name + ', ' + loc.type.replace('_', ' ') +
-      (isHidden ? ', hidden' : '') + ', ' + loc.mention_count + ' mentions');
+      (isHidden ? ', hidden' : ', visible') + ', ' + loc.mention_count + ' mentions');
 
     li.className = isHidden ? 'loc-hidden' : '';
 

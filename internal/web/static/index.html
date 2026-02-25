@@ -45,7 +45,7 @@
   </nav>
 
   <div id="map-container" role="main">
-    <div id="map" role="img" aria-label="Interactive map of Innworld locations. Use the sidebar location list for keyboard navigation."></div>
+    <div id="map" role="application" aria-label="Interactive map of Innworld locations. Tab through markers to explore, or use the sidebar location list." aria-roledescription="interactive map"></div>
     <aside id="sidebar" aria-label="Location list">
       <h2>Locations</h2>
       <input type="search" id="location-search" placeholder="Search locations..." aria-label="Search locations">
@@ -54,9 +54,11 @@
         <button id="show-all-btn" title="Show all locations">Show all</button>
       </div>
       <div id="location-count" aria-live="polite"></div>
-      <ul id="location-list" role="listbox" aria-label="Map locations"></ul>
+      <ul id="location-list" role="list" aria-label="Map locations"></ul>
     </aside>
   </div>
+
+  <div id="popup-live" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
 
   <script src="lib/leaflet.js"></script>
   <script src="app.js?v=2"></script>

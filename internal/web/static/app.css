@@ -187,7 +187,7 @@ body {
 #sidebar h2 {
   font-size: 18px;
   margin-bottom: 4px;
-  color: #e94560;
+  color: #f06080;
 }
 
 #location-search {
@@ -355,6 +355,11 @@ body {
      0 0 10px rgba(0,0,0,0.8) !important;
 }
 
+/* Leaflet attribution contrast fix */
+.leaflet-control-attribution a {
+  color: #005f87 !important;
+}
+
 /* Leaflet popup overrides */
 .leaflet-popup-content-wrapper {
   background: #16213e;
@@ -364,8 +369,8 @@ body {
 
 .leaflet-popup-tip { background: #16213e; }
 
-.leaflet-popup-content h3 {
-  color: #e94560;
+.leaflet-popup-content h2 {
+  color: #f06080;
   margin-bottom: 4px;
   font-size: 16px;
 }
@@ -417,6 +422,19 @@ body {
     -1px  1px 0 #000,
      1px  1px 0 #000,
      0 0 6px #000;
+}
+
+/* Screen-reader-only live region for popup announcements */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Global focus style for accessibility */
