@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TWI Map - The Wandering Inn</title>
+  <title>The Wandering Inn — Spoiler-Free Interactive Map</title>
   <meta name="description" content="Interactive, spoiler-free map of The Wandering Inn web serial. Explore Innworld as you read.">
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="stylesheet" href="lib/leaflet.css">
@@ -12,6 +12,11 @@
 <body>
   <a href="#map" class="skip-link">Skip to map</a>
   <a href="#location-list" class="skip-link">Skip to location list</a>
+
+  <header id="title-bar">
+    <h1>The Wandering Inn <span class="title-sep">&mdash;</span> <span class="title-sub">Spoiler-Free Interactive Map</span></h1>
+    <p class="title-hint">Only locations mentioned up to your selected chapter are shown.</p>
+  </header>
 
   <nav id="controls" aria-label="Map controls">
     <div id="chapter-control">
@@ -27,7 +32,7 @@
       <div id="type-filters" role="group" aria-label="Location type filters"></div>
     </fieldset>
     <div id="toggle-control">
-      <label><input type="checkbox" id="show-relationships"> Show relationships</label>
+      <label><input type="checkbox" id="show-relationships" checked> Show relationships</label>
     </div>
   </nav>
 

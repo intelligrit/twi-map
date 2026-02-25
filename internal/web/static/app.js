@@ -29,6 +29,28 @@ let markerById = {};
 // Volume boundaries: [{volume, firstIndex, lastIndex}], built from chapter data
 let volumeBounds = [];
 
+const STORAGE_KEY = 'twi-map-state';
+
+function saveState() {
+  try {
+    const state = {
+      chapter: parseInt(document.getElementById('chapter-slider').value) || 0,
+      showRelationships: document.getElementById('show-relationships').checked,
+      activeTypes: [...activeTypes],
+      hiddenLocations: [...hiddenLocations],
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) { /* storage unavailable */ }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) { return null; }
+}
+
 // Escape HTML to prevent XSS from LLM-generated location data.
 function escapeHtml(str) {
   if (!str) return '';
@@ -73,16 +95,19 @@ async function init() {
     return;
   }
 
+  // Restore saved state before building UI
+  const saved = loadState();
+
   if (chapters.length > 0) {
     // Build volume boundaries for jump navigation
     buildVolumeBounds();
 
     const slider = document.getElementById('chapter-slider');
     slider.max = chapters.length - 1;
-    slider.value = 0;
+    slider.value = saved ? Math.min(saved.chapter, chapters.length - 1) : 0;
     slider.addEventListener('input', onSliderChange);
     slider.addEventListener('keydown', onSliderKeydown);
-    updateChapterLabel(0);
+    updateChapterLabel(parseInt(slider.value));
 
     // Populate volume dropdown
     const volSelect = document.getElementById('volume-select');
@@ -98,17 +123,34 @@ async function init() {
     });
   }
 
+  // Restore relationships toggle
+  const relCheckbox = document.getElementById('show-relationships');
+  if (saved && typeof saved.showRelationships === 'boolean') {
+    relCheckbox.checked = saved.showRelationships;
+  }
+
+  // Restore hidden locations
+  if (saved && saved.hiddenLocations) {
+    hiddenLocations = new Set(saved.hiddenLocations);
+  }
+
+  // Restore active type filters
+  if (saved && saved.activeTypes) {
+    activeTypes = new Set(saved.activeTypes);
+  }
+
   // Set up type filters
   const filterDiv = document.getElementById('type-filters');
   for (const [type, color] of Object.entries(TYPE_COLORS)) {
+    const isActive = activeTypes.has(type);
     const label = document.createElement('label');
-    label.className = 'active';
+    label.className = isActive ? 'active' : '';
     label.style.background = color;
     label.style.color = luminance(color) > 0.5 ? '#000' : '#fff';
 
     const input = document.createElement('input');
     input.type = 'checkbox';
-    input.checked = true;
+    input.checked = isActive;
     input.dataset.type = type;
     input.setAttribute('aria-label', type.replace('_', ' ') + ' locations');
     input.addEventListener('change', () => {
@@ -119,6 +161,7 @@ async function init() {
         activeTypes.delete(type);
         label.classList.remove('active');
       }
+      saveState();
       renderMap();
     });
 
@@ -127,7 +170,7 @@ async function init() {
     filterDiv.appendChild(label);
   }
 
-  document.getElementById('show-relationships').addEventListener('change', renderMap);
+  relCheckbox.addEventListener('change', () => { saveState(); renderMap(); });
 
   await loadData();
 }
@@ -350,6 +393,7 @@ function toggleLocationVisibility(locId) {
   } else {
     hiddenLocations.add(locId);
   }
+  saveState();
   renderMap();
 }
 
@@ -381,6 +425,7 @@ function buildVolumeBounds() {
 function onSliderChange() {
   const val = parseInt(document.getElementById('chapter-slider').value);
   updateChapterLabel(val);
+  saveState();
   // Debounce data loading to avoid flooding the server when dragging the slider.
   clearTimeout(sliderDebounceTimer);
   sliderDebounceTimer = setTimeout(loadData, 150);

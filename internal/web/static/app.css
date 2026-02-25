@@ -27,6 +27,33 @@ body {
   top: 0;
 }
 
+#title-bar {
+  background: #16213e;
+  padding: 6px 16px;
+  border-bottom: 1px solid #0f3460;
+}
+
+#title-bar h1 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #e0e0e0;
+}
+
+#title-bar .title-sep {
+  color: #0f3460;
+}
+
+#title-bar .title-sub {
+  color: #4ecdc4;
+  font-weight: 600;
+}
+
+#title-bar .title-hint {
+  font-size: 12px;
+  color: #b0b0c0;
+  margin-top: 1px;
+}
+
 #controls {
   background: #16213e;
   padding: 10px 16px;
