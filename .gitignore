@@ -2,6 +2,8 @@ data/
 twi-map
 *.exe
 .DS_Store
+.env*
 .claude/
+CLAUDE.md
 internal/web/static/map-base-original.png
 internal/web/static/map-base.png
