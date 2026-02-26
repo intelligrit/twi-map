@@ -1072,4 +1072,22 @@ function distToSegment(p, a, b) {
   return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
 }
 
+// Sidebar toggle for mobile
+(function () {
+  const toggle = document.getElementById('sidebar-toggle');
+  const sidebar = document.getElementById('sidebar');
+  if (!toggle || !sidebar) return;
+
+  // Start collapsed on mobile
+  if (window.innerWidth <= 768) {
+    sidebar.classList.add('collapsed');
+    toggle.setAttribute('aria-expanded', 'false');
+  }
+
+  toggle.addEventListener('click', () => {
+    const collapsed = sidebar.classList.toggle('collapsed');
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+  });
+})();
+
 init();

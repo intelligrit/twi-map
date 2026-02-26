@@ -6,6 +6,8 @@
 
 Interactive, spoiler-free map of [The Wandering Inn](https://wanderinginn.com) web serial. Explore Innworld as you read — the map reveals locations only as they appear in the story.
 
+**[View the live map](https://intelligrit.com/the-wandering-inn-map/)**
+
 ## Features
 
 - **Spoiler-free chapter slider** — set your reading progress and the map only shows what you've encountered so far
