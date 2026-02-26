@@ -1,0 +1,20 @@
+# twi-map configuration
+# CLI flags override these values when explicitly set.
+
+[data]
+# Directory for storing scraped chapters, extractions, and the database.
+dir = "data"
+
+[server]
+# Address for the interactive map web server.
+host = "localhost"
+port = 8080
+
+[extract]
+# Anthropic model and token limit for LLM extraction.
+model = "claude-sonnet-4-20250514"
+max_tokens = 64000
+
+[scrape]
+# Maximum requests per second when downloading chapters.
+rate_limit = 1.0

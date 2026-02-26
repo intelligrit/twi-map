@@ -13,18 +13,18 @@ import (
 const (
 	anthropicAPI     = "https://api.anthropic.com/v1/messages"
 	anthropicVersion = "2023-06-01"
-	maxOutputTokens  = 64000 // maximum tokens in the extraction response
 )
 
 // Client calls the Anthropic Messages API.
 type Client struct {
 	APIKey     string
 	Model      string
+	MaxTokens  int
 	HTTPClient *http.Client
 }
 
 // NewClient creates a Client using the ANTHROPIC_API_KEY env var.
-func NewClient(model string) (*Client, error) {
+func NewClient(model string, maxTokens int) (*Client, error) {
 	key := os.Getenv("ANTHROPIC_API_KEY")
 	if key == "" {
 		return nil, fmt.Errorf("ANTHROPIC_API_KEY environment variable not set")
@@ -32,6 +32,7 @@ func NewClient(model string) (*Client, error) {
 	return &Client{
 		APIKey:     key,
 		Model:      model,
+		MaxTokens:  maxTokens,
 		HTTPClient: &http.Client{},
 	}, nil
 }
@@ -75,7 +76,7 @@ func (c *Client) Extract(ctx context.Context, chapterTitle, chapterText string) 
 
 	reqBody := apiRequest{
 		Model:     c.Model,
-		MaxTokens: maxOutputTokens,
+		MaxTokens: c.MaxTokens,
 		System:    systemPrompt,
 		Messages: []apiMessage{
 			{Role: "user", Content: prompt},

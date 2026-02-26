@@ -31,7 +31,7 @@ var scrapeChaptersCmd = &cobra.Command{
 		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer cancel()
 
-		rl := scraper.NewRateLimiter(1.0) // 1 request per second
+		rl := scraper.NewRateLimiter(cfg.Scrape.RateLimit)
 
 		var toScrape []int
 		for _, ch := range toc.Chapters {

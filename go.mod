@@ -3,6 +3,7 @@ module github.com/intelligrit/twi-map
 go 1.25.0
 
 require (
+	github.com/BurntSushi/toml v1.6.0
 	github.com/PuerkitoBio/goquery v1.11.0
 	github.com/duckdb/duckdb-go/v2 v2.5.5
 	github.com/spf13/cobra v1.10.2

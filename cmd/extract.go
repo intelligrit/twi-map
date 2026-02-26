@@ -22,6 +22,10 @@ var extractCmd = &cobra.Command{
 	Use:   "extract",
 	Short: "Extract location data from chapter text using Claude API",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if !cmd.Flags().Changed("model") {
+			extractModel = cfg.Extract.Model
+		}
+
 		s, err := store.New(dataDir)
 		if err != nil {
 			return err
@@ -33,7 +37,7 @@ var extractCmd = &cobra.Command{
 			return fmt.Errorf("reading TOC (run scrape-toc first): %w", err)
 		}
 
-		client, err := extractor.NewClient(extractModel)
+		client, err := extractor.NewClient(extractModel, cfg.Extract.MaxTokens)
 		if err != nil {
 			return err
 		}
