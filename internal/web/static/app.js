@@ -136,7 +136,7 @@ async function init() {
 
   // Load chapters for the slider
   try {
-    const chapResp = await fetch('/api/chapters');
+    const chapResp = await fetch('api/chapters');
     chapters = await chapResp.json();
   } catch (e) {
     document.getElementById('chapter-label').textContent = 'Error loading chapters';
@@ -306,10 +306,10 @@ async function loadData() {
 
   try {
     const [locResp, relResp, coordResp, contResp] = await Promise.all([
-      fetch('/api/locations?through=' + through),
-      fetch('/api/relationships?through=' + through),
-      fetch('/api/coordinates'),
-      fetch('/api/containment')
+      fetch('api/locations?through=' + through),
+      fetch('api/relationships?through=' + through),
+      fetch('api/coordinates'),
+      fetch('api/containment')
     ]);
 
     locations = await locResp.json();
